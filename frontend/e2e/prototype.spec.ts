@@ -61,15 +61,18 @@ test('VK mobile controls leave room for the platform close button', async ({ pag
 })
 
 test('desktop VK iframe uses a wide layout without page scrolling', async ({ page }) => {
-  await page.setViewportSize({ width: 1100, height: 800 })
+  await page.setViewportSize({ width: 1100, height: 700 })
   await page.goto('/?vk_platform=desktop_web&vk_app_id=54711325')
 
   const hangar = await page.locator('.hangar-screen').boundingBox()
   const visual = await page.locator('.hangar-visual').boundingBox()
   const consolePanel = await page.locator('.hangar-console').boundingBox()
+  const upgradesButton = await page.getByRole('button', { name: 'Улучшения корабля' }).boundingBox()
   expect(hangar?.width).toBeGreaterThan(900)
   expect(visual?.x).toBeLessThan(consolePanel?.x ?? 0)
-  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(800)
+  expect(upgradesButton?.y ?? 701).toBeGreaterThanOrEqual(0)
+  expect((upgradesButton?.y ?? 701) + (upgradesButton?.height ?? 0)).toBeLessThanOrEqual(700)
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(700)
   await page.screenshot({ path: 'test-results/visual/desktop-vk-hangar.png' })
 
   await page.getByRole('button', { name: /Начать вылазку/i }).click()

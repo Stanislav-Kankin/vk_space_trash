@@ -1785,7 +1785,7 @@
   .hangar-screen {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;
-    height: clamp(560px, var(--vk-viewport-height, 680px), 760px);
+    height: clamp(560px, var(--vk-viewport-height, 680px), 680px);
   }
 
   .hangar-visual {
@@ -1810,7 +1810,7 @@
   .hangar-console {
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    justify-content: center;
     padding: 84px 22px max(24px, var(--safe-bottom));
   }
 
@@ -1838,7 +1838,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1.7fr) minmax(310px, 0.8fr);
     grid-template-rows: auto auto minmax(0, 1fr) auto;
-    height: clamp(560px, var(--vk-viewport-height, 680px), 760px);
+    height: clamp(560px, var(--vk-viewport-height, 680px), 680px);
     min-height: 0;
     padding-bottom: 0;
   }
