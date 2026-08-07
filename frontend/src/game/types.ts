@@ -49,6 +49,7 @@ export interface ExpeditionResult {
   scrapFound: number
   roomsExplored: number
   reason: string
+  shipCompletedNow: boolean
 }
 
 export type UpgradeKey = 'hull' | 'battery' | 'scanner'

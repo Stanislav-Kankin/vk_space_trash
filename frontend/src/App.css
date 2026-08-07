@@ -1552,6 +1552,13 @@
   background: var(--amber);
 }
 
+.notice.survey-complete {
+  color: #fff0cf;
+  background: rgba(41, 31, 15, 0.97);
+  border-color: var(--amber);
+  font-weight: 800;
+}
+
 /* Event sheets */
 .sheet-backdrop {
   position: absolute;
@@ -1791,6 +1798,19 @@
   height: 100%;
   background: var(--red);
   transition: width 180ms ease;
+}
+
+.combat-feedback {
+  position: relative;
+  z-index: 1;
+  min-height: 28px;
+  margin-top: 8px;
+  padding: 7px 9px;
+  color: #cad4d3;
+  background: rgba(13, 20, 22, 0.9);
+  border-left: 2px solid var(--red);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
 }
 
 .combat-actions {

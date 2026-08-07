@@ -43,6 +43,16 @@ const createDefaultShipProgress = (): Record<ShipId, ShipProgress> => ({
 
 const adjacent = (a: Room, b: Room) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1
 
+export const SHIP_SURVEY_COMPLETE_NOTICE = 'КАРТА ОБЪЕКТА ЗАВЕРШЕНА. Вернитесь в шлюз и эвакуируйте разведданные.'
+
+export const getEnemyDamageRange = (intent: 'strike' | 'charge'): readonly [number, number] =>
+  intent === 'charge' ? [3, 4] : [2, 3]
+
+const rollEnemyDamage = (intent: 'strike' | 'charge') => {
+  const [min, max] = getEnemyDamageRange(intent)
+  return min + Math.floor(Math.random() * (max - min + 1))
+}
+
 export const getRoomState = (room: Room, currentRoom: Room): RoomState => {
   if (room.visited) return 'visited'
   if (adjacent(room, currentRoom)) return 'available'
@@ -65,9 +75,18 @@ const endFailedRun = (run: ExpeditionRun, reason: string, bankedScrap: number) =
       scrapFound: run.scrap,
       roomsExplored: run.roomsExplored,
       reason,
+      shipCompletedNow: false,
     },
     run: null,
   }
+}
+
+const getRunFailure = (run: ExpeditionRun, bankedScrap: number, hullReason: string) => {
+  if (run.hull <= 0) return endFailedRun(run, hullReason, bankedScrap)
+  if (run.energy <= 0 && run.currentRoomId !== START_ROOM_ID) {
+    return endFailedRun(run, 'Батарея разряжена вдали от шлюза', bankedScrap)
+  }
+  return null
 }
 
 export const useGameStore = create<GameState>()(persist((set, get) => ({
@@ -119,6 +138,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         ? { ...room, visited: true, resolved: room.resolved || room.kind === 'empty' || room.kind === 'start' }
         : room,
     )
+    const surveyCompletedNow = firstVisit && rooms.every((room) => room.visited)
     const nextRun: ExpeditionRun = {
       ...run,
       currentRoomId: roomId,
@@ -126,15 +146,16 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
       energy: run.energy - 1,
       roomsExplored: run.roomsExplored + (firstVisit ? 1 : 0),
       rooms,
-      notice: roomNotice[target.kind] ?? null,
+      notice: surveyCompletedNow ? SHIP_SURVEY_COMPLETE_NOTICE : roomNotice[target.kind] ?? null,
       combat:
         target.kind === 'enemy' && !target.resolved
           ? { enemyHull: 6, enemyMaxHull: 6, enemyIntent: 'strike', round: 1 }
           : null,
     }
 
-    if (nextRun.hull <= 0) {
-      set(endFailedRun(nextRun, 'Корпус не выдержал повреждений', bankedScrap))
+    const failure = getRunFailure(nextRun, bankedScrap, 'Корпус не выдержал повреждений')
+    if (failure) {
+      set(failure)
       return
     }
     set({ run: nextRun })
@@ -172,8 +193,9 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
           : { ...nextRun, notice: 'Ремонтный модуль отключён.' }
     }
 
-    if (nextRun.hull <= 0) {
-      set(endFailedRun(nextRun, 'Корпус не выдержал повреждений', bankedScrap))
+    const failure = getRunFailure(nextRun, bankedScrap, 'Корпус не выдержал повреждений')
+    if (failure) {
+      set(failure)
       return
     }
     set({ run: nextRun })
@@ -189,22 +211,24 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     const enemyHull = Math.max(0, run.combat.enemyHull - damage)
 
     if (enemyHull === 0) {
-      set({
-        run: {
-          ...run,
-          energy,
-          scrap: run.scrap + 3,
-          rooms: run.rooms.map((room) =>
-            room.id === run.currentRoomId ? { ...room, resolved: true } : room,
-          ),
-          combat: null,
-          notice: 'Дрон обезврежен. Получено 3 лома.',
-        },
-      })
+      const surveyComplete = run.rooms.every((room) => room.visited)
+      const nextRun: ExpeditionRun = {
+        ...run,
+        energy,
+        scrap: run.scrap + 3,
+        rooms: run.rooms.map((room) =>
+          room.id === run.currentRoomId ? { ...room, resolved: true } : room,
+        ),
+        combat: null,
+        notice: surveyComplete ? SHIP_SURVEY_COMPLETE_NOTICE : 'Дрон обезврежен. Получено 3 лома.',
+      }
+      const failure = getRunFailure(nextRun, bankedScrap, 'Охранный дрон пробил корпус')
+      set(failure ?? { run: nextRun })
       return
     }
 
-    const enemyDamage = action === 'defend' ? 0 : run.combat.enemyIntent === 'charge' ? 3 : 2
+    const incomingDamage = rollEnemyDamage(run.combat.enemyIntent)
+    const enemyDamage = Math.max(0, incomingDamage - (action === 'defend' ? 2 : 0))
     const hull = run.hull - enemyDamage
     const nextRun: ExpeditionRun = {
       ...run,
@@ -214,13 +238,16 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         ...run.combat,
         enemyHull,
         round: run.combat.round + 1,
-        enemyIntent: run.combat.round % 2 === 0 ? 'charge' : 'strike',
+        enemyIntent: run.combat.enemyIntent === 'strike' ? 'charge' : 'strike',
       },
-      notice: action === 'defend' ? 'Удар принят на щит.' : `Получено ${enemyDamage} урона.`,
+      notice: action === 'defend'
+        ? `Щит поглотил 2 урона. Корпус получил ${enemyDamage}.`
+        : `Корпус получил ${enemyDamage} урона.`,
     }
 
-    if (hull <= 0) {
-      set(endFailedRun(nextRun, 'Охранный дрон пробил корпус', bankedScrap))
+    const failure = getRunFailure(nextRun, bankedScrap, 'Охранный дрон пробил корпус')
+    if (failure) {
+      set(failure)
       return
     }
     set({ run: nextRun })
@@ -231,6 +258,8 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     if (!run || run.currentRoomId !== START_ROOM_ID || run.combat) return
     const visitedRoomIds = run.rooms.filter((room) => room.visited).map((room) => room.id)
     const resolvedRoomIds = run.rooms.filter((room) => room.resolved).map((room) => room.id)
+    const completed = run.rooms.every((room) => room.visited)
+    const shipCompletedNow = completed && !shipProgress[run.shipId].completed
     set({
       screen: 'result',
       bankedScrap: bankedScrap + run.scrap,
@@ -239,7 +268,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         [run.shipId]: {
           visitedRoomIds,
           resolvedRoomIds,
-          completed: run.rooms.every((room) => room.visited),
+          completed,
         },
       },
       result: {
@@ -247,7 +276,8 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         scrapBanked: run.scrap,
         scrapFound: run.scrap,
         roomsExplored: run.roomsExplored,
-        reason: 'Стыковка завершена',
+        reason: shipCompletedNow ? 'Обнаружен маршрут к следующему объекту' : 'Стыковка завершена',
+        shipCompletedNow,
       },
       run: null,
     })

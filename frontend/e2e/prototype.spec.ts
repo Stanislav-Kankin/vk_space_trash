@@ -90,6 +90,42 @@ test('evacuated survey progress is restored on the same ship', async ({ page }) 
   await expect(page.locator('[data-room-id="4:1"]')).toHaveClass(/visited/)
 })
 
+test('finishing the last room unlocks the next route after evacuation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript(() => {
+    const surveyedRooms = [
+      '0:1', '0:2', '1:0', '1:1', '1:2', '1:3', '2:0', '2:1', '2:2',
+      '2:3', '2:4', '3:0', '3:1', '3:2', '3:3', '3:4', '4:1', '4:2',
+    ]
+    localStorage.setItem('cosmic-scavenger-progress', JSON.stringify({
+      version: 2,
+      state: {
+        bankedScrap: 32,
+        upgrades: { hull: 0, battery: 0, scanner: 0 },
+        shipProgress: {
+          'transport-7-alpha': {
+            visitedRoomIds: surveyedRooms,
+            resolvedRoomIds: surveyedRooms,
+            completed: false,
+          },
+        },
+      },
+    }))
+  })
+  await page.goto('/')
+  await launchExpedition(page)
+
+  await page.locator('[data-destination-id="4:3"]').click()
+  await expect(page.getByText(/КАРТА ОБЪЕКТА ЗАВЕРШЕНА/)).toBeVisible()
+  await page.locator('[data-destination-id="4:2"]').click()
+  await page.getByRole('button', { name: /Эвакуироваться/i }).click()
+
+  await expect(page.getByRole('heading', { name: 'Транспорт 7-Альфа изучен' })).toBeVisible()
+  await expect(page.getByText('Обнаружен маршрут к следующему объекту')).toBeVisible()
+  await page.waitForTimeout(450)
+  await page.screenshot({ path: 'test-results/visual/ship-complete-result.png' })
+})
+
 test('VK mobile controls leave room for the platform close button', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?vk_platform=mobile_android&vk_app_id=54711325')
@@ -222,10 +258,13 @@ test('completes a risky expedition and extracts at the starting airlock', async 
   await page.locator('[data-destination-id="1:1"]').click()
   await expect(page.getByText('Охранный дрон', { exact: true })).toBeVisible()
   await expect(page.getByAltText('Охранный дрон в контрольном коридоре')).toBeVisible()
+  await expect(page.getByText('Импульсный удар · 2–3')).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/combat.png' })
 
   await page.getByRole('button', { name: /Атака/i }).click()
+  await expect(page.getByText(/Корпус получил [23] урона/)).toBeVisible()
+  await expect(page.getByText('Импульсный удар · 3–4')).toBeVisible()
   await page.getByRole('button', { name: /Атака/i }).click()
   await page.getByRole('button', { name: /Атака/i }).click()
   await expect(page.getByText(/Дрон обезврежен/i)).toBeVisible()

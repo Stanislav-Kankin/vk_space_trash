@@ -33,7 +33,7 @@ import hazardImage from './assets/room-hazard.webp'
 import repairImage from './assets/room-repair.webp'
 import { gameAudio } from './audio'
 import { FIRST_SHIP_ID, roomCopy, SHIP_ROOM_COUNT, START_ROOM_ID, upgrades } from './game/content'
-import { getRoomState, useGameStore } from './game/store'
+import { getEnemyDamageRange, SHIP_SURVEY_COMPLETE_NOTICE, getRoomState, useGameStore } from './game/store'
 import type { ExpeditionRun, Room, RoomKind, UpgradeKey } from './game/types'
 import { setVKSwipeBack, VK_VISIBILITY_EVENT } from './vkRuntime'
 import './App.css'
@@ -542,7 +542,7 @@ function CombatSheet({ run }: { run: ExpeditionRun }) {
   const combat = run.combat
   if (!combat) return null
   const room = run.rooms.find((item) => item.id === run.currentRoomId)!
-  const intentDamage = combat.enemyIntent === 'charge' ? 3 : 2
+  const [intentMinDamage, intentMaxDamage] = getEnemyDamageRange(combat.enemyIntent)
 
   return (
     <motion.div className="combat-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -551,16 +551,17 @@ function CombatSheet({ run }: { run: ExpeditionRun }) {
       <div className="combat-header"><span>СЕКТОР {sectorCode(room)} · КОНТАКТ · РАУНД {combat.round}</span><strong>Охранный дрон</strong></div>
       <div className="enemy-stage">
         <div className="target-ring"><span className="target-lock" /></div>
-        <div className="enemy-intent"><Icon20WarningTriangleOutline /><span>НАМЕРЕНИЕ<strong>Импульсный удар · {intentDamage}</strong></span></div>
+        <div className="enemy-intent"><Icon20WarningTriangleOutline /><span>НАМЕРЕНИЕ<strong>Импульсный удар · {intentMinDamage}–{intentMaxDamage}</strong></span></div>
       </div>
       <div className="combat-stats">
         <span>КОРПУС ДРОНА</span>
         <strong>{combat.enemyHull}/{combat.enemyMaxHull}</strong>
         <div><i style={{ width: `${(combat.enemyHull / combat.enemyMaxHull) * 100}%` }} /></div>
       </div>
+      <div className="combat-feedback" aria-live="polite">{run.notice ?? 'Дрон выбирает цель.'}</div>
       <div className="combat-actions">
         <button type="button" onClick={() => { gameAudio.play('attack'); action('attack') }}><Icon20WrenchOutline /><span>Атака<small>2 урона</small></span></button>
-        <button type="button" onClick={() => { gameAudio.play('defend'); action('defend') }}><Icon20ShieldLineOutline /><span>Защита<small>Блок удара</small></span></button>
+        <button type="button" onClick={() => { gameAudio.play('defend'); action('defend') }}><Icon20ShieldLineOutline /><span>Защита<small>−2 входящего урона</small></span></button>
         <button type="button" disabled={run.energy < 2} onClick={() => { gameAudio.play('overload'); action('overload') }}><Icon20Flash /><span>Перегрузка<small>4 урона · −2</small></span></button>
       </div>
     </motion.div>
@@ -675,7 +676,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
 
       <AnimatePresence>
         {run.notice && !run.combat && (
-          <motion.button className="notice" type="button" onClick={clearNotice} initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.button className={`notice ${run.notice === SHIP_SURVEY_COMPLETE_NOTICE ? 'survey-complete' : ''}`} type="button" onClick={clearNotice} initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}>
             <span />{run.notice}
           </motion.button>
         )}
@@ -696,12 +697,13 @@ function ResultScreen() {
   const setScreen = useGameStore((state) => state.setScreen)
   if (!result) return null
   const success = result.status === 'extracted'
+  const shipCompleted = result.shipCompletedNow
 
   return (
     <section className={`screen result-screen ${success ? 'success' : 'failure'}`} aria-label="Результат экспедиции">
       <div className="result-scan" aria-hidden="true"><Icon28Rocket /></div>
-      <p className="result-eyebrow">{success ? 'СТЫКОВКА ПОДТВЕРЖДЕНА' : 'СИГНАЛ ПОТЕРЯН'}</p>
-      <h1>{success ? 'Добыча доставлена' : 'Экспедиция сорвана'}</h1>
+      <p className="result-eyebrow">{shipCompleted ? 'РАЗВЕДДАННЫЕ ЭВАКУИРОВАНЫ' : success ? 'СТЫКОВКА ПОДТВЕРЖДЕНА' : 'СИГНАЛ ПОТЕРЯН'}</p>
+      <h1>{shipCompleted ? 'Транспорт 7-Альфа изучен' : success ? 'Добыча доставлена' : 'Экспедиция сорвана'}</h1>
       <p className="result-reason">{result.reason}</p>
       <div className="result-total"><span>ЗАЧИСЛЕНО</span><strong>+{result.scrapBanked}</strong><small>лома</small></div>
       <div className="result-stats">

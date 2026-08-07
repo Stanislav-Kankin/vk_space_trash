@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FIRST_SHIP_ID, SHIP_ROOM_COUNT, START_ROOM_ID } from './content'
-import { useGameStore } from './store'
+import { SHIP_SURVEY_COMPLETE_NOTICE, useGameStore } from './store'
 
 describe('mock expedition state', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     localStorage.clear()
     useGameStore.setState(useGameStore.getInitialState(), true)
   })
@@ -48,6 +49,93 @@ describe('mock expedition state', () => {
     expect(useGameStore.getState().run?.currentRoomId).toBe('4:1')
     expect(useGameStore.getState().run?.previousRoomId).toBe(START_ROOM_ID)
     expect(useGameStore.getState().run?.energy).toBe(11)
+  })
+
+  it('ends the run at zero energy outside the evacuation airlock and retains 25 percent of scrap', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({ run: { ...run, energy: 1, scrap: 7 } })
+
+    useGameStore.getState().moveTo('4:1')
+
+    const state = useGameStore.getState()
+    expect(state.screen).toBe('result')
+    expect(state.run).toBeNull()
+    expect(state.result).toMatchObject({
+      status: 'failed',
+      scrapBanked: 1,
+      scrapFound: 7,
+      reason: 'Батарея разряжена вдали от шлюза',
+      shipCompletedNow: false,
+    })
+    expect(state.bankedScrap).toBe(33)
+  })
+
+  it('allows evacuation after reaching the airlock on the last energy unit', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '4:1',
+        energy: 1,
+        rooms: run.rooms.map((room) => room.id === '4:1' ? { ...room, visited: true, resolved: true } : room),
+      },
+    })
+
+    useGameStore.getState().moveTo(START_ROOM_ID)
+    expect(useGameStore.getState().run?.energy).toBe(0)
+    expect(useGameStore.getState().screen).toBe('expedition')
+
+    useGameStore.getState().extract()
+    expect(useGameStore.getState().result?.status).toBe('extracted')
+  })
+
+  it('ends the run when a room action consumes the last energy outside the airlock', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '4:1',
+        energy: 2,
+        rooms: run.rooms.map((room) => room.id === '4:1' ? { ...room, visited: true } : room),
+      },
+    })
+
+    useGameStore.getState().chooseRoomAction('primary')
+
+    expect(useGameStore.getState().result).toMatchObject({
+      status: 'failed',
+      scrapBanked: 1,
+      scrapFound: 4,
+      reason: 'Батарея разряжена вдали от шлюза',
+    })
+  })
+
+  it('rolls drone damage by intent and lets defense absorb two damage', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999)
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '1:1',
+        combat: { enemyHull: 6, enemyMaxHull: 6, enemyIntent: 'charge', round: 2 },
+      },
+    })
+
+    useGameStore.getState().combatAction('defend')
+    expect(useGameStore.getState().run).toMatchObject({
+      hull: 8,
+      combat: { enemyHull: 6, enemyIntent: 'strike', round: 3 },
+    })
+
+    useGameStore.getState().combatAction('attack')
+    expect(useGameStore.getState().run).toMatchObject({
+      hull: 5,
+      combat: { enemyHull: 4, enemyIntent: 'charge', round: 4 },
+    })
   })
 
   it('refuses extraction away from the starting room', () => {
@@ -103,6 +191,29 @@ describe('mock expedition state', () => {
     const progress = useGameStore.getState().shipProgress[FIRST_SHIP_ID]
     expect(progress.completed).toBe(true)
     expect(progress.visitedRoomIds).toHaveLength(SHIP_ROOM_COUNT)
+    expect(useGameStore.getState().result?.shipCompletedNow).toBe(true)
+    expect(useGameStore.getState().result?.reason).toBe('Обнаружен маршрут к следующему объекту')
+
+    useGameStore.getState().startRun()
+    useGameStore.getState().extract()
+    expect(useGameStore.getState().result?.shipCompletedNow).toBe(false)
+  })
+
+  it('notifies the player when the last unknown room is reached', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        rooms: run.rooms.map((room) => room.id === '4:3'
+          ? { ...room, visited: false, resolved: false }
+          : { ...room, visited: true, resolved: true }),
+      },
+    })
+
+    useGameStore.getState().moveTo('4:3')
+
+    expect(useGameStore.getState().run?.notice).toBe(SHIP_SURVEY_COMPLETE_NOTICE)
   })
 
   it('purchases an affordable permanent upgrade', () => {
