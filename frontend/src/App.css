@@ -1757,15 +1757,163 @@
   .panel-header h1 { font-size: 15px; }
 }
 
+@media (max-width: 759px) {
+  html[data-vk-platform^='mobile'] .top-bar,
+  html[data-vk-platform^='mobile'] .expedition-header {
+    padding-right: max(76px, calc(var(--safe-right) + 64px));
+  }
+}
+
 @media (min-height: 850px) {
   .map-wrap { padding-top: 28px; padding-bottom: 28px; }
   .enemy-stage { min-height: 390px; }
 }
 
-@media (min-width: 700px) {
-  .game-shell { margin-block: 18px; min-height: calc(100vh - 36px); border: 1px solid #344348; }
+@media (min-width: 760px) {
+  .game-shell {
+    width: min(100%, 1100px);
+    min-height: 100vh;
+    min-height: 100svh;
+    margin-block: 0;
+    border-inline: 1px solid #344348;
+  }
+
   .screen-frame,
-  .screen { min-height: calc(100vh - 38px); }
+  .screen {
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+
+  .hangar-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .hangar-visual {
+    min-height: 100vh;
+    min-height: 100svh;
+    max-height: none;
+    border-right: 1px solid #5c4828;
+    border-bottom: 0;
+  }
+
+  .hangar-title {
+    right: 36px;
+    bottom: 38px;
+    left: 36px;
+  }
+
+  .hangar-title h1 {
+    max-width: 520px;
+    font-size: 48px;
+  }
+
+  .hangar-console {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 84px 22px max(24px, var(--safe-bottom));
+  }
+
+  .hangar-metrics {
+    margin: 0 0 18px;
+    border: 1px solid #283639;
+  }
+
+  .hangar-metrics > div {
+    padding-inline: 8px;
+  }
+
+  .upgrade-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    padding: 24px;
+  }
+
+  .upgrade-card {
+    grid-template-rows: auto 1fr auto;
+    align-content: start;
+  }
+
+  .expedition-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(310px, 0.8fr);
+    grid-template-rows: auto auto minmax(330px, 1fr) auto;
+    height: 100vh;
+    height: 100svh;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding-bottom: 0;
+  }
+
+  .expedition-header,
+  .resource-bar {
+    grid-column: 1 / -1;
+  }
+
+  .location-stage {
+    grid-row: 3 / 5;
+    grid-column: 1;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    border-right: 1px solid #35464a;
+    border-bottom: 0;
+  }
+
+  .location-copy {
+    right: 28px;
+    bottom: 30px;
+    left: 28px;
+  }
+
+  .location-copy h2 {
+    font-size: 34px;
+  }
+
+  .location-copy > span {
+    max-width: 520px;
+    font-size: 13px;
+  }
+
+  .interest-point {
+    min-width: 240px;
+  }
+
+  .room-navigation {
+    grid-row: 3;
+    grid-column: 2;
+    padding: 20px 18px;
+    border-bottom: 0;
+  }
+
+  .exit-grid,
+  .exit-grid.exits-2,
+  .exit-grid.exits-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .exit-grid button {
+    min-height: 68px;
+  }
+
+  .expedition-footer {
+    grid-row: 4;
+    grid-column: 2;
+    padding: 14px 18px max(18px, var(--safe-bottom));
+    background: #0d1517;
+    border-top: 1px solid #28383c;
+  }
+
+  .deck-map-sheet,
+  .event-sheet,
+  .combat-sheet,
+  .settings-sheet {
+    max-width: 620px;
+    margin-inline: auto;
+    border-right: 1px solid #4b6368;
+    border-left: 1px solid #4b6368;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

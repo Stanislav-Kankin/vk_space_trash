@@ -48,6 +48,41 @@ test('workshop remains readable on the smallest viewport', async ({ page }) => {
   await page.screenshot({ path: 'test-results/visual/upgrades-320x568.png' })
 })
 
+test('VK mobile controls leave room for the platform close button', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?vk_platform=mobile_android&vk_app_id=54711325')
+
+  const hangarRightPadding = await page.locator('.top-bar').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingRight))
+  expect(hangarRightPadding).toBeGreaterThanOrEqual(76)
+
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  const expeditionRightPadding = await page.locator('.expedition-header').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingRight))
+  expect(expeditionRightPadding).toBeGreaterThanOrEqual(76)
+})
+
+test('desktop VK iframe uses a wide layout without page scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 800 })
+  await page.goto('/?vk_platform=desktop_web&vk_app_id=54711325')
+
+  const hangar = await page.locator('.hangar-screen').boundingBox()
+  const visual = await page.locator('.hangar-visual').boundingBox()
+  const consolePanel = await page.locator('.hangar-console').boundingBox()
+  expect(hangar?.width).toBeGreaterThan(900)
+  expect(visual?.x).toBeLessThan(consolePanel?.x ?? 0)
+
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  const stage = await page.locator('.location-stage').boundingBox()
+  const navigation = await page.locator('.room-navigation').boundingBox()
+  expect(stage?.x).toBeLessThan(navigation?.x ?? 0)
+
+  const layout = await page.evaluate(() => ({
+    height: window.innerHeight,
+    scrollHeight: document.documentElement.scrollHeight,
+  }))
+  expect(layout.scrollHeight).toBeLessThanOrEqual(layout.height + 1)
+  await page.screenshot({ path: 'test-results/visual/desktop-vk-expedition.png' })
+})
+
 test('alpha progress and preferences survive reload and can be reset', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?vk_platform=mobile_android&vk_app_id=101')
