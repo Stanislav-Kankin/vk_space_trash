@@ -48,6 +48,35 @@ test('workshop remains readable on the smallest viewport', async ({ page }) => {
   await page.screenshot({ path: 'test-results/visual/upgrades-320x568.png' })
 })
 
+test('hazard and repair rooms remain part of one deck route', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+
+  await page.getByRole('button', { name: 'Выключить звук' }).click()
+  await expect(page.getByRole('button', { name: 'Включить звук' })).toBeVisible()
+  await page.getByRole('button', { name: 'Включить звук' }).click()
+
+  await page.locator('[data-destination-id="3:2"]').click()
+  const transit = page.getByRole('status', { name: 'Переход в сектор 4-3' })
+  await expect(transit).toBeVisible()
+  await page.waitForTimeout(280)
+  await page.screenshot({ path: 'test-results/visual/transit-bulkhead.png' })
+  await expect(transit).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Проверить пробоину' })).toBeVisible()
+  await page.waitForTimeout(450)
+  await page.screenshot({ path: 'test-results/visual/hazard-location.png' })
+  await page.getByRole('button', { name: 'Проверить пробоину' }).click()
+  await page.getByRole('button', { name: 'Обойти переборку' }).click()
+
+  await page.locator('[data-destination-id="3:1"]').click()
+  await page.locator('[data-destination-id="3:0"]').click()
+  await expect(page.getByRole('button', { name: 'Подключиться к модулю' })).toBeVisible()
+  await expect(page.getByText('СЕКТОР 4-2 → СЕКТОР 4-1')).toBeVisible()
+  await page.waitForTimeout(450)
+  await page.screenshot({ path: 'test-results/visual/repair-location.png' })
+})
+
 test('completes a risky expedition and extracts at the starting airlock', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
@@ -64,6 +93,8 @@ test('completes a risky expedition and extracts at the starting airlock', async 
 
   await page.locator('[data-destination-id="4:1"]').click()
   await expect(page.getByRole('button', { name: 'Осмотреть контейнер' })).toBeVisible()
+  await expect(page.getByText('СЕКТОР 5-3 → СЕКТОР 5-2')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Правый борт, сектор 5-3.*обратный путь/i })).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/cargo-location.png' })
   await page.getByRole('button', { name: 'Осмотреть контейнер' }).click()
@@ -77,7 +108,8 @@ test('completes a risky expedition and extracts at the starting airlock', async 
   await page.getByRole('button', { name: 'Осмотреть контейнер' }).click()
   await page.getByRole('button', { name: 'Оставить как есть' }).click()
   await page.locator('[data-destination-id="1:1"]').click()
-  await expect(page.getByText('Охранный дрон')).toBeVisible()
+  await expect(page.getByText('Охранный дрон', { exact: true })).toBeVisible()
+  await expect(page.getByAltText('Охранный дрон в контрольном коридоре')).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/combat.png' })
 

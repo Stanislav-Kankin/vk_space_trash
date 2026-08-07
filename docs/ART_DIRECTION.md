@@ -40,7 +40,7 @@ Avoid: purple or blue-purple gradients, glossy cyberpunk neon, fantasy shapes, e
 
 ## Room assets
 
-Фоны стартового шлюза и грузового отсека сгенерированы специально для проекта встроенным image generation tool с ангаром в качестве стилевого референса. Рабочие файлы сохранены как `frontend/src/assets/room-airlock.webp` и `frontend/src/assets/room-cargo.webp`.
+Фоны стартового шлюза, грузового, аварийного, ремонтного и охранного отсеков сгенерированы специально для проекта встроенным image generation tool. Новые помещения используют шлюз и грузовой отсек как референсы общей архитектуры корабля. Рабочие файлы сохранены в `frontend/src/assets/room-*.webp`.
 
 ### Starting airlock prompt
 
@@ -76,4 +76,58 @@ Color palette: graphite, steel, faded off-white paint, cyan, amber, tiny red war
 Materials/textures: dented containers, scratched steel, dust, torn straps, hydraulic grease, chipped floor markings without letters
 Constraints: show the actual cargo room clearly; no people; no character hands; no text; no numbers; no logos; no watermark; no UI; original design only
 Avoid: warehouse on Earth, military armory, piles of gold, purple gradients, glossy cyberpunk neon, excessive darkness, blur, bokeh, lens flare, franchise resemblance
+```
+
+### Damaged compartment prompt
+
+```text
+Use case: stylized-concept
+Asset type: mobile game environment background, damaged pressure-control compartment
+Input images: Image 1 is the starting airlock and Image 2 is the adjacent cargo room from the same abandoned orbital freighter; preserve their exact industrial design language, doorway proportions, floor geometry, camera height, material wear, restrained lighting, and graphite/cyan/amber palette, but create a new connected compartment
+Primary request: the next navigable room inside the same ship, a ruptured pressure-control compartment with a torn internal bulkhead and a valuable service case visible beyond the dangerous opening
+Scene/backdrop: compact ship compartment connected by the same rounded rectangular bulkhead doors as the references, exposed pipes and cable trays continue naturally from adjacent rooms, buckled wall panels, one localized hull rupture sealed by a weak emergency field, loose straps and fine debris pulled toward it
+Subject: the torn bulkhead and service case are the unmistakable interactable focal point; a return doorway and one onward doorway remain clearly readable
+Style/medium: polished cinematic game environment art, grounded industrial science-fiction realism, coherent with both reference rooms
+Composition/framing: vertical 9:16 mobile composition, first-person eye-level wide angle matching the references, strong central depth, focal hazard in the middle area, lower quarter quieter for overlaid title and controls
+Lighting/mood: cold cyan emergency field around the rupture, warm amber utility light from the return route, sparse red warning indicators, tense but clearly inspectable, minimal haze
+Color palette: graphite, oxidized steel, faded off-white paint, cyan, amber, tiny red warnings; absolutely no purple
+Materials/textures: scratched paint, dirty steel, torn insulation, frost at pressure seams, repair welds, chipped nonverbal safety markings
+Constraints: same fictional ship and same deck as both references; no exterior view dominating the image; no people; no character hands; no readable text; no numbers; no logos; no watermark; no UI; original design only
+Avoid: unrelated architecture, Earth building, fantasy, glossy cyberpunk neon, purple gradients, excessive darkness, blur, bokeh, lens flare, franchise resemblance
+```
+
+### Repair module prompt
+
+```text
+Use case: stylized-concept
+Asset type: mobile game environment background, ship repair module compartment
+Input images: Image 1 is the starting airlock and Image 2 is the adjacent cargo room from the same abandoned orbital freighter; preserve their industrial design language, doorway proportions, floor geometry, camera height, material wear, restrained lighting, and graphite/cyan/amber palette, but create a new connected compartment
+Primary request: the next navigable room inside the same ship, a compact automated hull-repair workshop whose old service station is still operational
+Scene/backdrop: practical maintenance bay connected by the same rounded rectangular bulkhead doors as the references, wall-mounted articulated repair arms, hose reels, tool racks without readable labels, a central docking cradle and a rugged diagnostic console, pipes and floor tracks continue naturally from adjacent rooms
+Subject: the repair station and its cyan-lit coupling socket are the unmistakable interactable focal point; a return doorway and one onward doorway remain clearly readable
+Style/medium: polished cinematic game environment art, grounded industrial science-fiction realism, coherent with both reference rooms
+Composition/framing: vertical 9:16 mobile composition, first-person eye-level wide angle matching the references, strong central depth, repair station in the middle area, lower quarter quieter for overlaid title and controls
+Lighting/mood: stable cyan task lighting at the repair station, warm amber lamps marking the return route, tiny green operational indicators, calm mechanical refuge within a dangerous ship, clearly inspectable, minimal haze
+Color palette: graphite, oxidized steel, faded off-white paint, cyan, amber, restrained green status lights; absolutely no purple
+Materials/textures: scratched paint, dirty steel, hydraulic grease, worn rubber hoses, repair welds, chipped nonverbal safety markings
+Constraints: same fictional ship and same deck as both references; no people; no robots shaped like characters; no character hands; no readable text; no numbers; no logos; no watermark; no UI; original design only
+Avoid: unrelated laboratory, medical room, Earth garage, fantasy, glossy cyberpunk neon, purple gradients, excessive darkness, blur, bokeh, lens flare, franchise resemblance
+```
+
+### Security checkpoint prompt
+
+```text
+Use case: stylized-concept
+Asset type: mobile game environment background, ship security checkpoint combat location
+Input images: Image 1 is the starting airlock and Image 2 is the adjacent cargo room from the same abandoned orbital freighter; preserve their industrial design language, doorway proportions, floor geometry, camera height, material wear, restrained lighting, and graphite/cyan/amber palette, but create a new connected compartment
+Primary request: the next navigable room inside the same ship, an abandoned internal security checkpoint where a compact automated guard drone has activated
+Scene/backdrop: narrow checkpoint chamber connected by the same rounded rectangular bulkhead doors as the references, retractable barrier frames, damaged wall scanners, cargo inspection rails, exposed pipes and floor tracks continuing naturally from adjacent rooms
+Subject: one small practical hovering security drone centered at medium distance with a single red sensor and utilitarian armored geometry, clearly readable against the room; return doorway visible behind or beside it
+Style/medium: polished cinematic game environment art, grounded industrial science-fiction realism, coherent with both reference rooms
+Composition/framing: vertical 9:16 mobile composition, first-person eye-level wide angle matching the references, drone centered in the upper-middle with generous dark readable space around it for combat overlays, lower quarter quieter for controls
+Lighting/mood: restrained cyan checkpoint lighting, warm amber spill from the return route, focused red threat light only on the drone sensor, tense and clearly inspectable, minimal haze
+Color palette: graphite, oxidized steel, faded off-white paint, cyan, amber, small red threat accents; absolutely no purple
+Materials/textures: scratched paint, dirty steel, worn barriers, impact marks, repair welds, chipped nonverbal safety markings
+Constraints: same fictional ship and same deck as both references; exactly one drone; no people; no character hands; no weapons firing; no readable text; no numbers; no logos; no watermark; no UI; original design only
+Avoid: giant robot, humanoid robot, spaceship exterior, unrelated architecture, fantasy, glossy cyberpunk neon, purple gradients, excessive darkness, blur, bokeh, lens flare, franchise resemblance
 ```

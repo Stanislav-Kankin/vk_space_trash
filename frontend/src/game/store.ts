@@ -79,6 +79,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         scrap: 0,
         roomsExplored: 1,
         currentRoomId: START_ROOM_ID,
+        previousRoomId: null,
         rooms: createRooms(),
         combat: null,
         notice: 'Шлюз отмечен. Канал эвакуации стабилен.',
@@ -103,6 +104,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const nextRun: ExpeditionRun = {
       ...run,
       currentRoomId: roomId,
+      previousRoomId: current.id,
       energy: run.energy - 1,
       roomsExplored: run.roomsExplored + (firstVisit ? 1 : 0),
       rooms,

@@ -28,6 +28,7 @@ export interface ExpeditionRun {
   scrap: number
   roomsExplored: number
   currentRoomId: string
+  previousRoomId: string | null
   rooms: Room[]
   combat: CombatState | null
   notice: string | null

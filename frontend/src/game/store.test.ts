@@ -13,6 +13,7 @@ describe('mock expedition state', () => {
 
     const run = useGameStore.getState().run
     expect(run?.currentRoomId).toBe(START_ROOM_ID)
+    expect(run?.previousRoomId).toBeNull()
     expect(run?.hull).toBe(12)
     expect(run?.energy).toBe(14)
   })
@@ -24,6 +25,7 @@ describe('mock expedition state', () => {
 
     useGameStore.getState().moveTo('4:1')
     expect(useGameStore.getState().run?.currentRoomId).toBe('4:1')
+    expect(useGameStore.getState().run?.previousRoomId).toBe(START_ROOM_ID)
     expect(useGameStore.getState().run?.energy).toBe(11)
   })
 
