@@ -146,3 +146,63 @@ Materials/textures: scratched paint, dirty steel, worn barriers, impact marks, r
 Constraints: same fictional ship and same deck as both references; exactly one drone; no people; no character hands; no weapons firing; no readable text; no numbers; no logos; no watermark; no UI; original design only
 Avoid: giant robot, humanoid robot, spaceship exterior, unrelated architecture, fantasy, glossy cyberpunk neon, purple gradients, excessive darkness, blur, bokeh, lens flare, franchise resemblance
 ```
+
+## Hephaestus-9 assets
+
+Четыре фона промышленного переработчика сгенерированы встроенным image generation tool и сохранены как `frontend/src/assets/hephaestus-*.jpg`. Они образуют единый набор приёмного сектора, плавильного цеха, охлаждения и центра управления.
+
+### Receiving sector prompt
+
+```text
+Use case: stylized-concept
+Asset type: mobile game location background for a VK sci-fi scavenging game
+Primary request: interior of the receiving and sorting bay aboard an abandoned industrial recycling spaceship named Hephaestus-9
+Scene/backdrop: a coherent 6x6-deck industrial ship zone, massive cargo conveyors, magnetic crane rails, battered sealed crates, jammed bulkhead doors, no people
+Style/medium: cinematic photorealistic hard-surface science fiction concept art, grounded utilitarian spaceship architecture, same visual universe as a worn independent salvage ship
+Composition/framing: portrait 2:3 game background, clear central depth corridor, useful lower area for title overlay, one inspectable cargo focal point near center, no UI
+Lighting/mood: cold cyan work lights mixed with restrained amber hazard lamps, abandoned but readable, moderate contrast
+Materials/textures: scratched steel, grease, cable trays, worn yellow safety markings, compact industrial machinery
+Constraints: consistent real ship interior, no text, no letters, no logos, no watermark, no people, no fantasy elements, no visible interface, avoid overly dark image
+```
+
+### Smelting sector prompt
+
+```text
+Use case: stylized-concept
+Asset type: mobile game location background for a VK sci-fi scavenging game
+Primary request: abandoned smelting and thermal compaction chamber aboard the same industrial recycling spaceship Hephaestus-9
+Scene/backdrop: towering furnace throat, hydraulic thermal press, piles of valuable techno-scrap fused by extreme heat into dense metallic wreckage, service catwalk and bulkhead exits
+Style/medium: cinematic photorealistic hard-surface science fiction concept art, grounded utilitarian spaceship architecture
+Composition/framing: portrait 2:3 game background, clear central machinery and fused debris focal point, readable floor path, useful lower area for title overlay, no UI
+Lighting/mood: hot red furnace glow balanced by neutral work lights, hazardous but clearly readable, not monochrome orange
+Materials/textures: scorched steel, oxidized machinery, glowing seams, blackened cable conduits, worn safety markings
+Constraints: coherent with an industrial cargo spaceship, no text, no letters, no logos, no watermark, no people, no fantasy, no interface, avoid excessive darkness
+```
+
+### Cooling sector prompt
+
+```text
+Use case: stylized-concept
+Asset type: mobile game location background for a VK sci-fi scavenging game
+Primary request: abandoned cooling and pressure-control gallery aboard the same industrial recycling spaceship Hephaestus-9
+Scene/backdrop: long machinery corridor with coolant manifolds, frost-covered pipes, leaking vapor, pressure doors, a dangerous floor vent trap and a sealed vacuum cache
+Style/medium: cinematic photorealistic hard-surface science fiction concept art, grounded utilitarian spaceship architecture
+Composition/framing: portrait 2:3 game background, strong corridor continuity, central pressure door, visible but not exaggerated floor hazard, useful lower area for title overlay, no UI
+Lighting/mood: icy blue-white lights with a few amber warning lamps, cold mist, tense but readable
+Materials/textures: frosted steel, condensation, pipe insulation, grated floor, worn safety markings
+Constraints: coherent with the receiving and smelting zones of one ship, no text, no letters, no logos, no watermark, no people, no fantasy, no interface, avoid monochrome dark blue
+```
+
+### Control sector prompt
+
+```text
+Use case: stylized-concept
+Asset type: mobile game location background for a VK sci-fi scavenging game
+Primary request: abandoned control center and power-distribution chamber aboard the same industrial recycling spaceship Hephaestus-9
+Scene/backdrop: rugged industrial command consoles, dead display walls, heavy switchgear, reactor diagnostics, encrypted archive terminal, branching bulkhead corridors
+Style/medium: cinematic photorealistic hard-surface science fiction concept art, grounded utilitarian spaceship architecture
+Composition/framing: portrait 2:3 game background, command terminal focal point in upper-middle, central walking path, useful lower area for title overlay, no UI graphics or readable text
+Lighting/mood: muted green diagnostic glow, cold white ceiling lights, restrained amber emergency accents, abandoned yet readable
+Materials/textures: scratched metal consoles, ceramic insulators, copper buses, thick cables, worn floor plates
+Constraints: coherent with the same industrial ship, screens may glow but contain no symbols or text, no letters, no logos, no watermark, no people, no fantasy, no visible game interface, avoid overly dark image
+```

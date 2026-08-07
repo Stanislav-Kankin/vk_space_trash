@@ -533,13 +533,12 @@
 }
 
 .ship-node.active {
-  top: 52%;
-  left: 20%;
   border-color: var(--cyan);
   box-shadow: 0 0 0 1px rgba(88, 215, 223, 0.24), 0 0 30px rgba(40, 106, 112, 0.3);
   cursor: pointer;
 }
 
+.ship-node.node-alpha { top: 52%; left: 20%; }
 .ship-node.node-beta { top: 31%; left: 62%; }
 .ship-node.node-gamma { top: 60%; left: 88%; }
 
@@ -657,11 +656,39 @@
 
 /* Upgrades */
 .upgrades-screen {
+  overflow-y: auto;
   padding-bottom: max(24px, var(--safe-bottom));
   background-color: #0d1416;
   background-image:
     repeating-linear-gradient(90deg, transparent 0, transparent 67px, rgba(88, 215, 223, 0.025) 68px),
     repeating-linear-gradient(0deg, transparent 0, transparent 67px, rgba(88, 215, 223, 0.025) 68px);
+}
+
+.workshop-tabs {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 8px 14px 0;
+  background: #0d1416;
+  border-bottom: 1px solid #2b393c;
+}
+
+.workshop-tabs button {
+  min-height: 40px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workshop-tabs button.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
 }
 
 .panel-header {
@@ -713,6 +740,11 @@
   border: 1px solid #2e3d40;
   border-radius: 6px;
   box-shadow: inset 3px 0 0 #3e9fa6;
+}
+
+.upgrade-card.locked,
+.tool-card.locked {
+  opacity: 0.58;
 }
 
 .upgrade-icon {
@@ -804,6 +836,87 @@
   height: 6px;
   background: var(--green);
 }
+
+.tool-workshop {
+  padding: 14px;
+}
+
+.loadout-status {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  color: var(--cyan);
+  background: #101a1c;
+  border: 1px solid #33464a;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
+}
+
+.loadout-status strong { color: var(--amber); font-size: 16px; }
+.loadout-status small { grid-column: 1 / -1; color: var(--muted); }
+
+.tool-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tool-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px 12px;
+  padding: 14px;
+  background: #141d20;
+  border: 1px solid #2e3d40;
+  border-radius: 6px;
+}
+
+.tool-card.selected {
+  border-color: var(--amber-dim);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.tool-copy h2 { margin: 0; font-size: 14px; }
+.tool-copy p { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+
+.tool-durability {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  color: var(--muted);
+  font: 8px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.tool-durability strong { color: #dce5e4; }
+.tool-durability i { grid-column: 1 / -1; height: 4px; overflow: hidden; background: #2a393c; }
+.tool-durability b { display: block; height: 100%; background: var(--green); }
+
+.tool-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.tool-actions button {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: #dce5e4;
+  background: #172225;
+  border: 1px solid #3d5054;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tool-actions button:only-child { grid-column: 1 / -1; }
+.tool-actions button:disabled { opacity: 0.42; cursor: not-allowed; }
 
 /* Expedition */
 .expedition-screen {
@@ -1131,6 +1244,16 @@
   border-color: #ff938c;
 }
 
+.location-trap .location-copy p,
+.location-vacuum .location-copy p { color: var(--red); }
+
+.location-door .location-copy p { color: var(--amber); }
+
+.location-debris .location-copy p,
+.location-cargo .location-copy p,
+.location-power .location-copy p,
+.location-terminal .location-copy p { color: var(--amber); }
+
 .location-repair .interest-point {
   background: rgba(99, 217, 160, 0.94);
   border-color: #baf2d7;
@@ -1349,6 +1472,13 @@
   box-shadow: inset 0 0 34px rgba(0, 0, 0, 0.55);
 }
 
+.ship-map.grid-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+  padding: 7px;
+}
+
 .ship-map::before,
 .ship-map::after {
   position: absolute;
@@ -1408,6 +1538,13 @@
 .map-room.kind-storage.visited { color: var(--amber); }
 .map-room.kind-hazard.visited { color: var(--red); }
 .map-room.kind-repair.visited { color: var(--green); }
+.map-room.kind-debris.visited,
+.map-room.kind-cargo.visited,
+.map-room.kind-power.visited,
+.map-room.kind-terminal.visited { color: var(--amber); }
+.map-room.kind-trap.visited,
+.map-room.kind-vacuum.visited { color: var(--red); }
+.map-room.kind-door.visited { color: var(--amber); }
 .map-room.kind-start { color: var(--cyan); border-color: var(--cyan-dim); }
 
 .map-room.current {
@@ -1661,6 +1798,19 @@
   font-weight: 600;
 }
 
+.event-actions .tool-auxiliary {
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  color: #f3d59b;
+  border-color: var(--amber-dim);
+}
+
+.event-actions .tool-auxiliary small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
 /* Combat */
 .combat-screen {
   position: absolute;
@@ -1888,6 +2038,22 @@
   color: var(--muted);
   font-size: 12px;
 }
+
+.completion-reward {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  margin: -8px 0 16px;
+  padding: 12px;
+  color: var(--amber);
+  background: #211b12;
+  border: 1px solid var(--amber-dim);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.completion-reward span { font-size: 8px; }
+.completion-reward strong { font-size: 18px; }
+.completion-reward small { color: #c8b58f; font-size: 8px; line-height: 1.4; }
 
 .result-total {
   display: grid;
@@ -2118,6 +2284,17 @@
     gap: 14px;
     padding: 24px;
   }
+
+  .upgrades-screen {
+    height: clamp(560px, var(--vk-viewport-height, 680px), 680px);
+  }
+
+  .tool-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .tool-workshop { padding: 24px; }
 
   .star-map-screen {
     height: clamp(560px, var(--vk-viewport-height, 680px), 680px);

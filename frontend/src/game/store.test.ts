@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FIRST_SHIP_ID, SHIP_ROOM_COUNT, START_ROOM_ID } from './content'
+import {
+  FIRST_SHIP_ID,
+  SECOND_SHIP_ID,
+  SECOND_SHIP_ROOM_COUNT,
+  SECOND_START_ROOM_ID,
+  SHIP_ROOM_COUNT,
+  START_ROOM_ID,
+} from './content'
 import { SHIP_SURVEY_COMPLETE_NOTICE, useGameStore } from './store'
 
 describe('mock expedition state', () => {
@@ -10,7 +17,7 @@ describe('mock expedition state', () => {
   })
 
   it('starts at the evacuation airlock with upgrade bonuses', () => {
-    useGameStore.setState({ upgrades: { hull: 1, battery: 1, scanner: 0 } })
+    useGameStore.setState({ upgrades: { ...useGameStore.getState().upgrades, hull: 1, battery: 1 } })
     useGameStore.getState().startRun()
 
     const run = useGameStore.getState().run
@@ -32,12 +39,27 @@ describe('mock expedition state', () => {
     await useGameStore.persist.rehydrate()
     const state = useGameStore.getState()
     expect(state.bankedScrap).toBe(57)
-    expect(state.upgrades).toEqual({ hull: 1, battery: 2, scanner: 0 })
+    expect(state.upgrades).toMatchObject({ hull: 1, battery: 2, scanner: 0 })
     expect(state.shipProgress[FIRST_SHIP_ID]).toEqual({
       visitedRoomIds: [START_ROOM_ID],
       resolvedRoomIds: [START_ROOM_ID],
       completed: false,
     })
+  })
+
+  it('converts the old scanner to one level and refunds removed levels', async () => {
+    localStorage.setItem('cosmic-scavenger-progress', JSON.stringify({
+      version: 2,
+      state: {
+        bankedScrap: 10,
+        upgrades: { hull: 0, battery: 0, scanner: 3 },
+      },
+    }))
+
+    await useGameStore.persist.rehydrate()
+
+    expect(useGameStore.getState().upgrades.scanner).toBe(1)
+    expect(useGameStore.getState().bankedScrap).toBe(82)
   })
 
   it('allows only adjacent movement and spends one energy', () => {
@@ -91,24 +113,48 @@ describe('mock expedition state', () => {
     expect(useGameStore.getState().result?.status).toBe('extracted')
   })
 
-  it('ends the run when a room action consumes the last energy outside the airlock', () => {
+  it('uses the emergency capacitor once instead of ending the run', () => {
+    useGameStore.setState({ upgrades: { ...useGameStore.getState().upgrades, emergencyCapacitor: 2 } })
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({ run: { ...run, energy: 1 } })
+
+    useGameStore.getState().moveTo('4:1')
+
+    expect(useGameStore.getState().screen).toBe('expedition')
+    expect(useGameStore.getState().run).toMatchObject({ energy: 4, emergencyUsed: true })
+    expect(useGameStore.getState().run?.notice).toContain('Аварийный конденсатор')
+  })
+
+  it('raises retained scrap with the cargo stabilizer', () => {
+    useGameStore.setState({ upgrades: { ...useGameStore.getState().upgrades, cargoStabilizer: 5 } })
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({ run: { ...run, energy: 1, scrap: 8 } })
+
+    useGameStore.getState().moveTo('4:1')
+
+    expect(useGameStore.getState().result?.scrapBanked).toBe(4)
+  })
+
+  it('ends the run when bypassing a hazard consumes the last energy outside the airlock', () => {
     useGameStore.getState().startRun()
     const run = useGameStore.getState().run!
     useGameStore.setState({
       run: {
         ...run,
-        currentRoomId: '4:1',
-        energy: 2,
-        rooms: run.rooms.map((room) => room.id === '4:1' ? { ...room, visited: true } : room),
+        currentRoomId: '3:2',
+        energy: 1,
+        rooms: run.rooms.map((room) => room.id === '3:2' ? { ...room, visited: true } : room),
       },
     })
 
-    useGameStore.getState().chooseRoomAction('primary')
+    useGameStore.getState().chooseRoomAction('secondary')
 
     expect(useGameStore.getState().result).toMatchObject({
       status: 'failed',
-      scrapBanked: 1,
-      scrapFound: 4,
+      scrapBanked: 0,
+      scrapFound: 0,
       reason: 'Батарея разряжена вдали от шлюза',
     })
   })
@@ -162,7 +208,7 @@ describe('mock expedition state', () => {
   it('saves surveyed rooms on extraction and restores them in the next expedition', () => {
     useGameStore.getState().startRun()
     useGameStore.getState().moveTo('4:1')
-    useGameStore.getState().chooseRoomAction('secondary')
+    useGameStore.getState().chooseRoomAction('primary')
     useGameStore.getState().moveTo(START_ROOM_ID)
     useGameStore.getState().extract()
 
@@ -193,10 +239,167 @@ describe('mock expedition state', () => {
     expect(progress.visitedRoomIds).toHaveLength(SHIP_ROOM_COUNT)
     expect(useGameStore.getState().result?.shipCompletedNow).toBe(true)
     expect(useGameStore.getState().result?.reason).toBe('Обнаружен маршрут к следующему объекту')
+    expect(useGameStore.getState().result?.completionReward).toBe(50)
+    expect(useGameStore.getState().bankedScrap).toBe(82)
 
     useGameStore.getState().startRun()
     useGameStore.getState().extract()
     expect(useGameStore.getState().result?.shipCompletedNow).toBe(false)
+    expect(useGameStore.getState().result?.completionReward).toBe(0)
+  })
+
+  it('unlocks the 6 by 6 industrial ship only after the first ship is complete', () => {
+    useGameStore.getState().startRun(SECOND_SHIP_ID)
+    expect(useGameStore.getState().run).toBeNull()
+
+    useGameStore.setState({
+      shipProgress: {
+        ...useGameStore.getState().shipProgress,
+        [FIRST_SHIP_ID]: { visitedRoomIds: [], resolvedRoomIds: [], completed: true },
+      },
+    })
+    useGameStore.getState().startRun(SECOND_SHIP_ID)
+
+    const run = useGameStore.getState().run
+    expect(run?.currentRoomId).toBe(SECOND_START_ROOM_ID)
+    expect(run?.rooms).toHaveLength(SECOND_SHIP_ROOM_COUNT)
+    expect(new Set(run?.rooms.map((room) => room.x))).toHaveLength(6)
+    expect(new Set(run?.rooms.map((room) => room.y))).toHaveLength(6)
+  })
+
+  it('resolves an industrial trap with d20 plus trap sense', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.2)
+    useGameStore.setState({
+      upgrades: { ...useGameStore.getState().upgrades, trapSense: 10 },
+      shipProgress: {
+        ...useGameStore.getState().shipProgress,
+        [FIRST_SHIP_ID]: { visitedRoomIds: [], resolvedRoomIds: [], completed: true },
+      },
+    })
+    useGameStore.getState().startRun(SECOND_SHIP_ID)
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '0:0',
+        rooms: run.rooms.map((room) => room.id === '0:0' ? { ...room, visited: true, resolved: true } : room),
+      },
+    })
+
+    useGameStore.getState().moveTo('0:1')
+
+    const nextRun = useGameStore.getState().run
+    expect(nextRun?.hull).toBe(10)
+    expect(nextRun?.notice).toContain('d20 5 + чутьё 10 = 15 против 14')
+    expect(nextRun?.notice).toContain('Урон предотвращён')
+    expect(nextRun?.rooms.find((room) => room.id === '0:1')?.resolved).toBe(true)
+  })
+
+  it('uses an auxiliary tool with triple durability wear', () => {
+    useGameStore.setState({
+      bankedScrap: 100,
+      shipProgress: {
+        ...useGameStore.getState().shipProgress,
+        [FIRST_SHIP_ID]: { visitedRoomIds: [], resolvedRoomIds: [], completed: true },
+      },
+    })
+    useGameStore.getState().buyTool('laser')
+    useGameStore.getState().toggleLoadoutTool('mechanic')
+    useGameStore.getState().toggleLoadoutTool('laser')
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '4:1',
+        rooms: run.rooms.map((room) => room.id === '4:1' ? { ...room, visited: true } : room),
+      },
+    })
+
+    useGameStore.getState().chooseRoomAction('auxiliary')
+
+    expect(useGameStore.getState().tools.laser.durability).toBe(17)
+    expect(useGameStore.getState().run?.scrap).toBeGreaterThanOrEqual(2)
+    expect(useGameStore.getState().run?.rooms.find((room) => room.id === '4:1')?.resolved).toBe(true)
+  })
+
+  it('breaks a tool, removes it from the loadout and sells a replacement', () => {
+    useGameStore.setState({
+      tools: { ...useGameStore.getState().tools, mechanic: { owned: true, durability: 1 } },
+    })
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '4:1',
+        rooms: run.rooms.map((room) => room.id === '4:1' ? { ...room, visited: true } : room),
+      },
+    })
+
+    useGameStore.getState().chooseRoomAction('primary')
+    expect(useGameStore.getState().tools.mechanic).toEqual({ owned: false, durability: 0 })
+    expect(useGameStore.getState().loadout).not.toContain('mechanic')
+
+    useGameStore.getState().buyTool('mechanic')
+    expect(useGameStore.getState().tools.mechanic).toEqual({ owned: true, durability: 12 })
+    expect(useGameStore.getState().bankedScrap).toBe(12)
+  })
+
+  it('repairs an intact tool one point at the configured price', () => {
+    useGameStore.setState({
+      tools: { ...useGameStore.getState().tools, mechanic: { owned: true, durability: 10 } },
+    })
+
+    useGameStore.getState().repairTool('mechanic')
+
+    expect(useGameStore.getState().tools.mechanic.durability).toBe(11)
+    expect(useGameStore.getState().bankedScrap).toBe(30)
+  })
+
+  it('adds up to three bonus scrap to salvage', () => {
+    useGameStore.setState({ upgrades: { ...useGameStore.getState().upgrades, salvageBonus: 3 } })
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '4:1',
+        rooms: run.rooms.map((room) => room.id === '4:1' ? { ...room, visited: true } : room),
+      },
+    })
+
+    useGameStore.getState().chooseRoomAction('primary')
+    expect(useGameStore.getState().run?.scrap).toBe(7)
+  })
+
+  it('keeps a jammed door passable only toward the previous room until opened', () => {
+    useGameStore.setState({
+      shipProgress: {
+        ...useGameStore.getState().shipProgress,
+        [FIRST_SHIP_ID]: { visitedRoomIds: [], resolvedRoomIds: [], completed: true },
+      },
+    })
+    useGameStore.getState().startRun(SECOND_SHIP_ID)
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '1:0',
+        previousRoomId: '2:0',
+        rooms: run.rooms.map((room) => ['1:0', '2:0'].includes(room.id) ? { ...room, visited: true, resolved: room.id === '2:0' } : room),
+      },
+    })
+
+    useGameStore.getState().moveTo('0:0')
+    expect(useGameStore.getState().run?.currentRoomId).toBe('1:0')
+    useGameStore.getState().moveTo('2:0')
+    expect(useGameStore.getState().run?.currentRoomId).toBe('2:0')
+    useGameStore.getState().moveTo('1:0')
+    useGameStore.getState().chooseRoomAction('primary')
+    expect(useGameStore.getState().run?.rooms.find((room) => room.id === '1:0')?.resolved).toBe(true)
+    useGameStore.getState().moveTo('0:0')
+    expect(useGameStore.getState().run?.currentRoomId).toBe('0:0')
   })
 
   it('notifies the player when the last unknown room is reached', () => {
@@ -231,7 +434,9 @@ describe('mock expedition state', () => {
     const state = useGameStore.getState()
     expect(state.screen).toBe('hangar')
     expect(state.bankedScrap).toBe(32)
-    expect(state.upgrades).toEqual({ hull: 0, battery: 0, scanner: 0 })
+    expect(state.upgrades).toMatchObject({ hull: 0, battery: 0, scanner: 0, trapSense: 0, salvageBonus: 0 })
+    expect(state.tools.mechanic).toEqual({ owned: true, durability: 12 })
+    expect(state.loadout).toEqual(['mechanic'])
     expect(state.shipProgress[FIRST_SHIP_ID]).toEqual({
       visitedRoomIds: [START_ROOM_ID],
       resolvedRoomIds: [START_ROOM_ID],

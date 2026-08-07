@@ -31,17 +31,44 @@ import cargoImage from './assets/room-cargo.webp'
 import enemyImage from './assets/room-enemy.webp'
 import hazardImage from './assets/room-hazard.webp'
 import repairImage from './assets/room-repair.webp'
+import hephaestusControlImage from './assets/hephaestus-control.jpg'
+import hephaestusCoolingImage from './assets/hephaestus-cooling.jpg'
+import hephaestusFurnaceImage from './assets/hephaestus-furnace.jpg'
+import hephaestusIntakeImage from './assets/hephaestus-intake.jpg'
 import { gameAudio } from './audio'
-import { FIRST_SHIP_ID, roomCopy, SHIP_ROOM_COUNT, START_ROOM_ID, upgrades } from './game/content'
+import {
+  FIRST_SHIP_ID,
+  getShip,
+  getShipRoomCount,
+  getToolDefinition,
+  getToolMaxDurability,
+  roomCopy,
+  salvageDefinitions,
+  SECOND_SHIP_ID,
+  toolDefinitions,
+  upgrades,
+} from './game/content'
 import { getEnemyDamageRange, SHIP_SURVEY_COMPLETE_NOTICE, getRoomState, useGameStore } from './game/store'
-import type { ExpeditionRun, Room, RoomKind, UpgradeKey } from './game/types'
+import type { ExpeditionRun, Room, RoomKind, ShipId, ToolKey, UpgradeCategory, UpgradeKey } from './game/types'
 import { setVKSwipeBack, VK_VISIBILITY_EVENT } from './vkRuntime'
 import './App.css'
 
 const BUILD_VERSION = import.meta.env.VITE_BUILD_VERSION || 'local'
 const SOUND_PREFERENCE = 'cosmic-scavenger-sound'
 const MOTION_PREFERENCE = 'cosmic-scavenger-reduced-motion'
-const preloadUrls = [hangarImage, galaxyMapImage, airlockImage, cargoImage, enemyImage, hazardImage, repairImage]
+const preloadUrls = [
+  hangarImage,
+  galaxyMapImage,
+  airlockImage,
+  cargoImage,
+  enemyImage,
+  hazardImage,
+  repairImage,
+  hephaestusControlImage,
+  hephaestusCoolingImage,
+  hephaestusFurnaceImage,
+  hephaestusIntakeImage,
+]
 
 const readBooleanPreference = (key: string, fallback: boolean) => {
   try {
@@ -74,6 +101,13 @@ const roomIcons: Record<RoomKind, ReactNode> = {
   hazard: <Icon20WarningTriangleOutline />,
   enemy: <Icon20ShieldLineOutline />,
   repair: <Icon20WrenchOutline />,
+  debris: <Icon20Flash />,
+  cargo: <Icon20CubeBoxOutline />,
+  power: <Icon20Flash />,
+  terminal: <Icon20CompassOutline />,
+  vacuum: <Icon20ShieldLineOutline />,
+  trap: <Icon20WarningTriangleOutline />,
+  door: <Icon20LockOutline />,
 }
 
 const roomVisuals: Record<RoomKind, { image: string; eyebrow: string; title: string; body: string; alt: string }> = {
@@ -119,6 +153,55 @@ const roomVisuals: Record<RoomKind, { image: string; eyebrow: string; title: str
     body: 'Сканирующая рамка ожила. Охранный дрон перекрыл дальнейший маршрут.',
     alt: 'Контрольный коридор с активным охранным дроном',
   },
+  debris: {
+    image: hephaestusFurnaceImage,
+    eyebrow: 'ПЛАВИЛЬНЫЙ ЦЕХ',
+    title: 'Спёкшийся техномусор',
+    body: 'Высокая температура спрессовала обломки в плотный пласт редких сплавов.',
+    alt: 'Плавильный цех с раскалёнными спрессованными обломками',
+  },
+  cargo: {
+    image: hephaestusIntakeImage,
+    eyebrow: 'КРАНОВАЯ ЛИНИЯ',
+    title: 'Подвесной груз',
+    body: 'Магнитная рама застыла над шахтой вместе с контейнером.',
+    alt: 'Индустриальный грузовой отсек с магнитным краном',
+  },
+  power: {
+    image: hephaestusControlImage,
+    eyebrow: 'СИЛОВОЙ КОНТУР',
+    title: 'Распределительный узел',
+    body: 'Остаточный заряд держится в массивном промышленном модуле.',
+    alt: 'Силовой распределительный узел промышленного корабля',
+  },
+  terminal: {
+    image: hephaestusControlImage,
+    eyebrow: 'АРХИВНЫЙ КОНТУР',
+    title: 'Мёртвый терминал',
+    body: 'Локальная память защищена старым промышленным шифром.',
+    alt: 'Заброшенный центр управления с терминалами',
+  },
+  vacuum: {
+    image: hephaestusCoolingImage,
+    eyebrow: 'КОНТУР ДАВЛЕНИЯ',
+    title: 'Вакуумный тайник',
+    body: 'Иней выдаёт утечку вокруг герметичного контейнера.',
+    alt: 'Холодная магистраль с вакуумным контейнером',
+  },
+  trap: {
+    image: hephaestusCoolingImage,
+    eyebrow: 'НЕСТАБИЛЬНЫЙ КОНТУР',
+    title: 'Замаскированная ловушка',
+    body: 'Сенсоры фиксируют остаточный импульс в механизмах пола.',
+    alt: 'Индустриальный коридор с опасным напольным механизмом',
+  },
+  door: {
+    image: hephaestusIntakeImage,
+    eyebrow: 'МАРШРУТ ЗАБЛОКИРОВАН',
+    title: 'Заклинившие ворота',
+    body: 'Промышленный привод перекошен и удерживает створки.',
+    alt: 'Заклинившие промышленные ворота в грузовом секторе',
+  },
 }
 
 const roomNames: Record<RoomKind, string> = {
@@ -128,6 +211,13 @@ const roomNames: Record<RoomKind, string> = {
   hazard: 'Опасный сектор',
   enemy: 'Сигнатура охраны',
   repair: 'Ремонтный пост',
+  debris: 'Спёкшийся техномусор',
+  cargo: 'Подвесной груз',
+  power: 'Силовой модуль',
+  terminal: 'Архивный терминал',
+  vacuum: 'Вакуумный тайник',
+  trap: 'Контур ловушки',
+  door: 'Заклинившие ворота',
 }
 
 function IconButton({ label, children, onClick }: { label: string; children: ReactNode; onClick: () => void }) {
@@ -215,9 +305,14 @@ function StarMapScreen() {
   const viewportRef = useRef<HTMLDivElement>(null)
   const setScreen = useGameStore((state) => state.setScreen)
   const startRun = useGameStore((state) => state.startRun)
-  const progress = useGameStore((state) => state.shipProgress[FIRST_SHIP_ID])
+  const shipProgress = useGameStore((state) => state.shipProgress)
+  const [selectedShipId, setSelectedShipId] = useState<ShipId>(FIRST_SHIP_ID)
+  const firstShipComplete = shipProgress[FIRST_SHIP_ID].completed
+  const selectedShip = getShip(selectedShipId)
+  const progress = shipProgress[selectedShipId]
+  const roomCount = getShipRoomCount(selectedShipId)
   const visitedCount = progress.visitedRoomIds.length
-  const completion = Math.round((visitedCount / SHIP_ROOM_COUNT) * 100)
+  const completion = Math.round((visitedCount / roomCount) * 100)
 
   const pan = (direction: -1 | 1) => {
     const viewport = viewportRef.current
@@ -243,14 +338,20 @@ function StarMapScreen() {
             <span className="sector-route route-alpha" aria-hidden="true" />
             <span className="sector-route route-beta" aria-hidden="true" />
 
-            <button className="ship-node active" type="button" onClick={() => startRun(FIRST_SHIP_ID)} aria-label="Исследовать транспорт 7-Альфа">
+            <button className={`ship-node node-alpha ${selectedShipId === FIRST_SHIP_ID ? 'active' : ''}`} type="button" onClick={() => setSelectedShipId(FIRST_SHIP_ID)} aria-label="Исследовать транспорт 7-Альфа">
               <span className="ship-node-signal"><Icon28Rocket /></span>
-              <span className="ship-node-copy"><small>ДОСТУПЕН</small><strong>Транспорт 7-Альфа</strong><em>{visitedCount}/{SHIP_ROOM_COUNT} отсеков</em></span>
+              <span className="ship-node-copy"><small>ДОСТУПЕН</small><strong>Транспорт 7-Альфа</strong><em>{shipProgress[FIRST_SHIP_ID].visitedRoomIds.length}/{getShipRoomCount(FIRST_SHIP_ID)} отсеков</em></span>
             </button>
 
-            <button className={`ship-node locked node-beta ${progress.completed ? 'route-detected' : ''}`} type="button" disabled>
-              <span className="ship-node-signal"><Icon20LockOutline /></span>
-              <span className="ship-node-copy"><small>{progress.completed ? 'СИГНАЛ ОБНАРУЖЕН' : 'МАРШРУТ ЗАКРЫТ'}</small><strong>Крейсер R-4</strong><em>{progress.completed ? 'Подготовка экспедиции' : 'Изучите первый объект'}</em></span>
+            <button
+              className={`ship-node node-beta ${firstShipComplete ? `route-detected ${selectedShipId === SECOND_SHIP_ID ? 'active' : ''}` : 'locked'}`}
+              type="button"
+              disabled={!firstShipComplete}
+              onClick={() => setSelectedShipId(SECOND_SHIP_ID)}
+              aria-label="Исследовать промышленный переработчик Гефест-9"
+            >
+              <span className="ship-node-signal">{firstShipComplete ? <Icon20WrenchOutline /> : <Icon20LockOutline />}</span>
+              <span className="ship-node-copy"><small>{firstShipComplete ? 'МАРШРУТ ОТКРЫТ' : 'МАРШРУТ ЗАКРЫТ'}</small><strong>Гефест-9</strong><em>{firstShipComplete ? `${shipProgress[SECOND_SHIP_ID].visitedRoomIds.length}/${getShipRoomCount(SECOND_SHIP_ID)} отсеков` : 'Изучите первый объект'}</em></span>
             </button>
 
             <button className="ship-node locked node-gamma" type="button" disabled>
@@ -263,15 +364,15 @@ function StarMapScreen() {
       </div>
 
       <footer className="star-map-selection">
-        <div className="target-summary"><span>ВЫБРАННЫЙ ОБЪЕКТ</span><h2>Заброшенный транспорт</h2><p>Реактор заглушен. Шлюз К-17 удерживает стабильный канал.</p></div>
+        <div className="target-summary"><span>ВЫБРАННЫЙ ОБЪЕКТ</span><h2>{selectedShip.subtitle}</h2><p>{selectedShip.description}</p></div>
         <div className="survey-progress">
           <div><span>РАЗВЕДАНО</span><strong>{completion}%</strong></div>
           <div className="survey-track"><span style={{ width: `${completion}%` }} /></div>
-          <small>{progress.completed ? 'ОБЪЕКТ ИЗУЧЕН' : `${visitedCount} ИЗ ${SHIP_ROOM_COUNT} ОТСЕКОВ`}</small>
+          <small>{progress.completed ? 'ОБЪЕКТ ИЗУЧЕН' : `${visitedCount} ИЗ ${roomCount} ОТСЕКОВ`}</small>
         </div>
         <button className="primary-action dock-button" type="button" onClick={() => {
           gameAudio.play('launch')
-          startRun(FIRST_SHIP_ID)
+          startRun(selectedShipId)
         }}><Icon28Rocket /><span><small>КАНАЛ СТАБИЛЕН</small>Стыковаться</span></button>
       </footer>
     </section>
@@ -282,13 +383,38 @@ const upgradeIcons: Record<UpgradeKey, ReactNode> = {
   hull: <Icon20ShieldLineOutline />,
   battery: <Icon20Flash />,
   scanner: <Icon20CompassOutline />,
+  trapSense: <Icon20WarningTriangleOutline />,
+  salvageBonus: <Icon20CubeBoxOutline />,
+  toolDurability: <Icon20WrenchOutline />,
+  emergencyCapacitor: <Icon20Flash />,
+  cargoStabilizer: <Icon20ShieldLineOutline />,
+  shieldAmplifier: <Icon20ShieldLineOutline />,
 }
+
+const toolIcons: Record<ToolKey, ReactNode> = {
+  mechanic: <Icon20WrenchOutline />,
+  laser: <Icon20Flash />,
+  grapple: <Icon20CubeBoxOutline />,
+  diagnostic: <Icon20CompassOutline />,
+  decoder: <Icon20LockOutline />,
+  sealant: <Icon20ShieldLineOutline />,
+}
+
+type WorkshopTab = UpgradeCategory | 'tools'
 
 function UpgradesScreen() {
   const bankedScrap = useGameStore((state) => state.bankedScrap)
   const levels = useGameStore((state) => state.upgrades)
+  const tools = useGameStore((state) => state.tools)
+  const loadout = useGameStore((state) => state.loadout)
+  const firstShipComplete = useGameStore((state) => state.shipProgress[FIRST_SHIP_ID].completed)
   const setScreen = useGameStore((state) => state.setScreen)
   const purchase = useGameStore((state) => state.purchaseUpgrade)
+  const buyTool = useGameStore((state) => state.buyTool)
+  const repairTool = useGameStore((state) => state.repairTool)
+  const toggleLoadoutTool = useGameStore((state) => state.toggleLoadoutTool)
+  const [tab, setTab] = useState<WorkshopTab>('systems')
+  const visibleUpgrades = upgrades.filter((upgrade) => upgrade.category === tab)
 
   return (
     <section className="screen upgrades-screen" aria-label="Улучшения корабля">
@@ -298,38 +424,72 @@ function UpgradesScreen() {
         <div className="scrap-counter"><Icon20CubeBoxOutline /><strong>{bankedScrap}</strong></div>
       </header>
 
-      <div className="upgrade-list">
-        {upgrades.map((upgrade) => {
+      <div className="workshop-tabs" role="tablist" aria-label="Разделы мастерской">
+        <button className={tab === 'systems' ? 'active' : ''} type="button" onClick={() => setTab('systems')}>Модули</button>
+        <button className={tab === 'skills' ? 'active' : ''} type="button" onClick={() => setTab('skills')}>Навыки</button>
+        <button className={tab === 'tools' ? 'active' : ''} type="button" onClick={() => setTab('tools')}>Инструменты</button>
+      </div>
+
+      {tab !== 'tools' && <div className="upgrade-list">
+        {visibleUpgrades.map((upgrade) => {
           const level = levels[upgrade.key]
           const price = upgrade.prices[level]
           const maxed = price === undefined
           const affordable = price !== undefined && bankedScrap >= price
+          const locked = Boolean(upgrade.unlockAfterFirstShip && !firstShipComplete)
+          const maxLevel = upgrade.prices.length
           return (
-            <article className="upgrade-card" key={upgrade.key}>
+            <article className={`upgrade-card ${locked ? 'locked' : ''}`} key={upgrade.key}>
               <div className="upgrade-icon">{upgradeIcons[upgrade.key]}</div>
               <div className="upgrade-copy">
-                <div className="upgrade-heading"><h2>{upgrade.name}</h2><span>УР. {level}/3</span></div>
-                <p>{upgrade.description}</p>
-                <div className="level-track" aria-label={`Уровень ${level} из 3`}>
-                  {[1, 2, 3].map((step) => <span className={step <= level ? 'filled' : ''} key={step} />)}
+                <div className="upgrade-heading"><h2>{upgrade.name}</h2><span>УР. {level}/{maxLevel}</span></div>
+                <p>{locked ? 'Откроется после исследования транспорта 7-Альфа' : upgrade.description}</p>
+                <div className="level-track" style={{ gridTemplateColumns: `repeat(${maxLevel}, 1fr)` }} aria-label={`Уровень ${level} из ${maxLevel}`}>
+                  {Array.from({ length: maxLevel }, (_, index) => index + 1).map((step) => <span className={step <= level ? 'filled' : ''} key={step} />)}
                 </div>
               </div>
               <button
                 className="buy-button"
                 type="button"
-                disabled={maxed || !affordable}
+                disabled={locked || maxed || !affordable}
                 onClick={() => {
                   gameAudio.play('repair')
                   purchase(upgrade.key)
                 }}
               >
-                {maxed ? 'МАКС.' : <><Icon20CubeBoxOutline /> {price}</>}
+                {locked ? <><Icon20LockOutline /> ЗАКРЫТО</> : maxed ? 'МАКС.' : <><Icon20CubeBoxOutline /> {price}</>}
               </button>
             </article>
           )
         })}
-      </div>
-      <div className="workshop-note"><span /> Корпус подготовлен к следующей вылазке</div>
+      </div>}
+
+      {tab === 'tools' && <div className="tool-workshop">
+        <div className="loadout-status"><span>КОМПЛЕКТ ЭКСПЕДИЦИИ</span><strong>{loadout.length}/2</strong><small>Снаряжение меняется только в ангаре</small></div>
+        <div className="tool-list">
+          {toolDefinitions.map((definition) => {
+            const tool = tools[definition.key]
+            const maxDurability = getToolMaxDurability(definition.key, levels.toolDurability)
+            const selected = loadout.includes(definition.key)
+            const locked = Boolean(definition.unlockAfterFirstShip && !firstShipComplete)
+            const canRepair = tool.owned && tool.durability > 0 && tool.durability < maxDurability && bankedScrap >= definition.repairCost
+            return (
+              <article className={`tool-card ${selected ? 'selected' : ''} ${locked ? 'locked' : ''}`} key={definition.key}>
+                <div className="upgrade-icon">{toolIcons[definition.key]}</div>
+                <div className="tool-copy"><h2>{definition.name}</h2><p>{locked ? 'Откроется после первого корабля' : definition.description}</p></div>
+                <div className="tool-durability"><span>ПРОЧНОСТЬ</span><strong>{tool.durability}/{maxDurability}</strong><i><b style={{ width: `${(tool.durability / maxDurability) * 100}%` }} /></i></div>
+                <div className="tool-actions">
+                  {tool.owned ? <>
+                    <button type="button" disabled={tool.durability <= 0 || (!selected && loadout.length >= 2)} onClick={() => toggleLoadoutTool(definition.key)}>{selected ? 'Снять' : 'В комплект'}</button>
+                    <button type="button" disabled={!canRepair} onClick={() => repairTool(definition.key)}>Починить +1 · {definition.repairCost}</button>
+                  </> : <button type="button" disabled={locked || bankedScrap < definition.price} onClick={() => buyTool(definition.key)}><Icon20CubeBoxOutline /> Купить · {definition.price}</button>}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      </div>}
+      <div className="workshop-note"><span /> Выбрано инструментов: {loadout.length} из 2</div>
     </section>
   )
 }
@@ -360,22 +520,28 @@ function RoomIcon({ room, reveal }: { room: Room; reveal: boolean }) {
 
 function ShipMap({ run, locked, onMove }: { run: ExpeditionRun; locked: boolean; onMove: (roomId: string) => void }) {
   const scannerLevel = useGameStore((state) => state.upgrades.scanner)
+  const ship = getShip(run.shipId)
   const current = run.rooms.find((room) => room.id === run.currentRoomId)!
+  const doorBlocksForward = current.kind === 'door' && !current.resolved
   const roomLookup = useMemo(() => new Map(run.rooms.map((room) => [`${room.y}:${room.x}`, room])), [run.rooms])
 
   return (
     <div className="map-wrap">
-      <div className="map-caption"><span>ПАЛУБА 03</span><strong>{run.roomsExplored} отсеков исследовано</strong></div>
-      <div className="ship-map" role="grid" aria-label="Карта заброшенного корабля">
-        {Array.from({ length: 25 }, (_, index) => {
-          const x = index % 5
-          const y = Math.floor(index / 5)
+      <div className="map-caption"><span>{ship.deckLabel}</span><strong>{run.roomsExplored} отсеков исследовано</strong></div>
+      <div className={`ship-map grid-${ship.gridSize}`} role="grid" aria-label={`Карта корабля ${ship.name}`}>
+        {Array.from({ length: ship.gridSize ** 2 }, (_, index) => {
+          const x = index % ship.gridSize
+          const y = Math.floor(index / ship.gridSize)
           const room = roomLookup.get(`${y}:${x}`)
           if (!room) return <span className="map-void" key={`${y}:${x}`} aria-hidden="true" />
           const state = getRoomState(room, current)
           const isCurrent = room.id === run.currentRoomId
           const isAdjacent = Math.abs(room.x - current.x) + Math.abs(room.y - current.y) === 1
-          const canMove = isAdjacent && !isCurrent && !locked && run.energy > 0
+          const canMove = isAdjacent
+            && !isCurrent
+            && !locked
+            && run.energy > 0
+            && (!doorBlocksForward || room.id === run.previousRoomId)
           const reveal = state === 'visited' || (state === 'available' && scannerLevel > 0) || room.kind === 'start'
           return (
             <button
@@ -408,12 +574,37 @@ const directionMeta = (current: Room, destination: Room) => {
   return { label: 'К корме', icon: <Icon20ArrowDownOutline /> }
 }
 
-function RoomScene({ room, unresolved, onInteract }: { room: Room; unresolved: boolean; onInteract: () => void }) {
-  const visual = roomVisuals[room.kind]
+const hephaestusZoneImages = [
+  hephaestusIntakeImage,
+  hephaestusIntakeImage,
+  hephaestusFurnaceImage,
+  hephaestusFurnaceImage,
+  hephaestusCoolingImage,
+  hephaestusControlImage,
+]
+
+function RoomScene({ run, room, unresolved, onInteract }: { run: ExpeditionRun; room: Room; unresolved: boolean; onInteract: () => void }) {
+  const ship = getShip(run.shipId)
+  const baseVisual = roomVisuals[room.kind]
+  const visual = run.shipId === SECOND_SHIP_ID
+    ? {
+        ...baseVisual,
+        image: hephaestusZoneImages[room.y],
+        eyebrow: room.eyebrow ?? baseVisual.eyebrow,
+        title: room.title ?? baseVisual.title,
+        body: room.description ?? baseVisual.body,
+      }
+    : baseVisual
   const interactionLabels: Partial<Record<Room['kind'], string>> = {
     storage: 'Осмотреть контейнер',
     hazard: 'Проверить пробоину',
     repair: 'Подключиться к модулю',
+    debris: 'Осмотреть техномусор',
+    cargo: 'Проверить подвесной груз',
+    power: 'Осмотреть силовой модуль',
+    terminal: 'Подключиться к архиву',
+    vacuum: 'Осмотреть вакуумный тайник',
+    door: 'Осмотреть заклинившие ворота',
   }
   const interactionLabel = interactionLabels[room.kind]
 
@@ -421,7 +612,7 @@ function RoomScene({ room, unresolved, onInteract }: { room: Room; unresolved: b
     <motion.section className={`location-stage location-${room.kind}`} key={room.id} initial={{ opacity: 0.4 }} animate={{ opacity: 1 }}>
       <img src={visual.image} alt={visual.alt} />
       <div className="location-shade" />
-      <div className="location-code"><span /> ПАЛУБА 03 · СЕКТОР {sectorCode(room)}</div>
+      <div className="location-code"><span /> {ship.deckLabel} · СЕКТОР {sectorCode(room)}</div>
       <div className="deck-bearing">НОС <Icon20ArrowUpOutline /></div>
       {unresolved && interactionLabel && (
         <button className="interest-point" type="button" onClick={onInteract} aria-label={interactionLabel}>
@@ -443,6 +634,7 @@ function RoomNavigation({ run, locked, onTravel }: { run: ExpeditionRun; locked:
   const current = run.rooms.find((room) => room.id === run.currentRoomId)!
   const previous = run.rooms.find((room) => room.id === run.previousRoomId)
   const exits = run.rooms.filter((room) => Math.abs(room.x - current.x) + Math.abs(room.y - current.y) === 1)
+  const doorBlocksForward = current.kind === 'door' && !current.resolved
 
   return (
     <div className="room-navigation">
@@ -459,20 +651,21 @@ function RoomNavigation({ run, locked, onTravel }: { run: ExpeditionRun; locked:
           const direction = directionMeta(current, room)
           const known = room.visited || room.kind === 'start' || scannerLevel > 0
           const isReturn = room.id === run.previousRoomId
+          const blockedByDoor = doorBlocksForward && !isReturn
           return (
             <button
               type="button"
               key={room.id}
               data-destination-id={room.id}
               className={isReturn ? 'return-exit' : ''}
-              disabled={locked || run.energy <= 0}
+              disabled={locked || run.energy <= 0 || blockedByDoor}
               onClick={() => onTravel(room.id)}
               aria-label={`Перейти: ${direction.label}, сектор ${sectorCode(room)}, ${known ? roomNames[room.kind] : 'неизвестный отсек'}${isReturn ? ', обратный путь' : ''}`}
             >
               {direction.icon}
               <span>
                 <small>{direction.label} · {sectorCode(room)}</small>
-                <strong>{known ? roomNames[room.kind] : 'Неизвестный отсек'}</strong>
+                <strong>{blockedByDoor ? 'Сначала откройте ворота' : known ? roomNames[room.kind] : 'Неизвестный отсек'}</strong>
                 {isReturn && <em>ОБРАТНЫЙ ПУТЬ</em>}
               </span>
               <i>−1</i>
@@ -501,16 +694,29 @@ function DeckMapSheet({ run, locked, onClose, onTravel }: { run: ExpeditionRun; 
   )
 }
 
-function RoomEvent({ room, run }: { room: Room; run: ExpeditionRun }) {
+function RoomEvent({ room, run, onClose }: { room: Room; run: ExpeditionRun; onClose: () => void }) {
   const choose = useGameStore((state) => state.chooseRoomAction)
-  if (room.kind !== 'storage' && room.kind !== 'hazard' && room.kind !== 'repair') return null
-  const copy = roomCopy[room.kind]
-  const primary = {
-    storage: { label: 'Вскрыть контейнер', cost: '−2 энергии', disabled: run.energy < 2 },
-    hazard: { label: 'Забрать ящик', cost: '−2 корпуса · +5 лома', disabled: false },
-    repair: { label: 'Запустить ремонт', cost: '−2 лома · +3 корпуса', disabled: run.scrap < 2 || run.hull === run.maxHull },
-  }[room.kind]
-  const secondary = room.kind === 'hazard' ? 'Обойти переборку' : 'Оставить как есть'
+  const tools = useGameStore((state) => state.tools)
+  const loadout = run.equippedTools
+  const salvage = salvageDefinitions[room.kind]
+  if (!salvage && room.kind !== 'hazard' && room.kind !== 'repair') return null
+  const copy = roomCopy[room.kind as keyof typeof roomCopy]
+  const primaryTool = salvage ? getToolDefinition(salvage.primaryTool) : null
+  const auxiliaryTool = salvage?.auxiliaryTool ? getToolDefinition(salvage.auxiliaryTool) : null
+  const primaryAvailable = salvage
+    ? loadout.includes(salvage.primaryTool) && tools[salvage.primaryTool].owned && tools[salvage.primaryTool].durability >= 1
+    : room.kind === 'hazard' || (room.kind === 'repair' && run.scrap >= 2 && run.hull < run.maxHull)
+  const auxiliaryAvailable = Boolean(
+    salvage?.auxiliaryTool
+    && loadout.includes(salvage.auxiliaryTool)
+    && tools[salvage.auxiliaryTool].owned
+    && tools[salvage.auxiliaryTool].durability >= 3,
+  )
+
+  const act = (choice: 'primary' | 'auxiliary' | 'secondary') => {
+    choose(choice)
+    onClose()
+  }
 
   return (
     <motion.div className="sheet-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -518,19 +724,27 @@ function RoomEvent({ room, run }: { room: Room; run: ExpeditionRun }) {
         <div className="sheet-handle" />
         <div className="event-symbol">{roomIcons[room.kind]}</div>
         <p className="event-eyebrow">{copy.eyebrow}</p>
-        <h2>{copy.title}</h2>
-        <p className="event-body">{copy.body}</p>
+        <h2>{room.title ?? copy.title}</h2>
+        <p className="event-body">{room.description ?? copy.body}</p>
         <div className="event-actions">
-          <button className="primary-action" type="button" disabled={primary.disabled} onClick={() => {
+          <button className="primary-action" type="button" disabled={!primaryAvailable} onClick={() => {
             gameAudio.play(room.kind === 'hazard' ? 'hazard' : room.kind === 'repair' ? 'repair' : 'inspect')
-            choose('primary')
+            act('primary')
           }}>
-            <span>{primary.label}<small>{primary.cost}</small></span>
+            <span>
+              {salvage ? salvage.action : room.kind === 'hazard' ? 'Забрать ящик' : 'Запустить ремонт'}
+              <small>{primaryTool ? `${primaryTool.name} · −1 прочности` : room.kind === 'hazard' ? '−2 корпуса' : '−2 лома · +3 корпуса'}</small>
+            </span>
           </button>
+          {salvage && auxiliaryTool && <button className="secondary-action tool-auxiliary" type="button" disabled={!auxiliaryAvailable} onClick={() => {
+            gameAudio.play('inspect')
+            act('auxiliary')
+          }}>{salvage.action}<small>{auxiliaryTool.name} · −3 прочности</small></button>}
           <button className="secondary-action" type="button" onClick={() => {
             gameAudio.play('ui')
-            choose('secondary')
-          }}>{secondary}</button>
+            if (salvage) onClose()
+            else act('secondary')
+          }}>{room.kind === 'hazard' ? 'Обойти переборку' : 'Оставить как есть'}</button>
         </div>
       </motion.section>
     </motion.div>
@@ -539,6 +753,7 @@ function RoomEvent({ room, run }: { room: Room; run: ExpeditionRun }) {
 
 function CombatSheet({ run }: { run: ExpeditionRun }) {
   const action = useGameStore((state) => state.combatAction)
+  const shieldLevel = useGameStore((state) => state.upgrades.shieldAmplifier)
   const combat = run.combat
   if (!combat) return null
   const room = run.rooms.find((item) => item.id === run.currentRoomId)!
@@ -561,7 +776,7 @@ function CombatSheet({ run }: { run: ExpeditionRun }) {
       <div className="combat-feedback" aria-live="polite">{run.notice ?? 'Дрон выбирает цель.'}</div>
       <div className="combat-actions">
         <button type="button" onClick={() => { gameAudio.play('attack'); action('attack') }}><Icon20WrenchOutline /><span>Атака<small>2 урона</small></span></button>
-        <button type="button" onClick={() => { gameAudio.play('defend'); action('defend') }}><Icon20ShieldLineOutline /><span>Защита<small>−2 входящего урона</small></span></button>
+        <button type="button" onClick={() => { gameAudio.play('defend'); action('defend') }}><Icon20ShieldLineOutline /><span>Защита<small>−{2 + shieldLevel} входящего урона</small></span></button>
         <button type="button" disabled={run.energy < 2} onClick={() => { gameAudio.play('overload'); action('overload') }}><Icon20Flash /><span>Перегрузка<small>4 урона · −2</small></span></button>
       </div>
     </motion.div>
@@ -623,13 +838,16 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
   if (!run) return null
 
   const currentRoom = run.rooms.find((room) => room.id === run.currentRoomId)!
+  const ship = getShip(run.shipId)
   const unresolved = !currentRoom.resolved && currentRoom.kind !== 'enemy'
-  const distanceToExit = Math.abs(currentRoom.x - 2) + Math.abs(currentRoom.y - 4)
-  const locked = unresolved || Boolean(run.combat) || Boolean(travel)
-  const atExit = currentRoom.id === START_ROOM_ID
+  const startRoom = run.rooms.find((room) => room.id === ship.startRoomId)!
+  const distanceToExit = Math.abs(currentRoom.x - startRoom.x) + Math.abs(currentRoom.y - startRoom.y)
+  const locked = Boolean(run.combat) || Boolean(travel)
+  const atExit = currentRoom.id === ship.startRoomId
 
   const requestTravel = (roomId: string) => {
     if (locked || run.energy <= 0) return
+    if (currentRoom.kind === 'door' && !currentRoom.resolved && roomId !== run.previousRoomId) return
     const destination = run.rooms.find((room) => room.id === roomId)
     if (!destination) return
 
@@ -649,7 +867,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
   return (
     <section className="screen expedition-screen" aria-label="Экспедиция">
       <header className="expedition-header">
-        <div><span>ОБЪЕКТ 7-АЛЬФА</span><h1>Заброшенный транспорт</h1></div>
+        <div><span>{ship.objectLabel}</span><h1>{ship.subtitle}</h1></div>
         <div className="expedition-actions">
           <IconButton label={sound ? 'Выключить звук' : 'Включить звук'} onClick={onSound}>
             {sound ? <Icon24VolumeOutline /> : <Icon24MuteOutline />}
@@ -658,7 +876,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
         </div>
       </header>
       <ResourceBar run={run} />
-      <RoomScene room={currentRoom} unresolved={unresolved} onInteract={() => {
+      <RoomScene run={run} room={currentRoom} unresolved={unresolved} onInteract={() => {
         gameAudio.play('inspect')
         setInteractionOpen(true)
       }} />
@@ -684,7 +902,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
       <AnimatePresence>
         {mapOpen && <DeckMapSheet run={run} locked={locked} onClose={() => setMapOpen(false)} onTravel={requestTravel} />}
       </AnimatePresence>
-      {interactionOpen && unresolved && <RoomEvent room={currentRoom} run={run} />}
+      {interactionOpen && unresolved && <RoomEvent room={currentRoom} run={run} onClose={() => setInteractionOpen(false)} />}
       {run.combat && <CombatSheet run={run} />}
       {travel && <TransitOverlay travel={travel} />}
     </section>
@@ -698,13 +916,15 @@ function ResultScreen() {
   if (!result) return null
   const success = result.status === 'extracted'
   const shipCompleted = result.shipCompletedNow
+  const ship = getShip(result.shipId)
 
   return (
     <section className={`screen result-screen ${success ? 'success' : 'failure'}`} aria-label="Результат экспедиции">
       <div className="result-scan" aria-hidden="true"><Icon28Rocket /></div>
       <p className="result-eyebrow">{shipCompleted ? 'РАЗВЕДДАННЫЕ ЭВАКУИРОВАНЫ' : success ? 'СТЫКОВКА ПОДТВЕРЖДЕНА' : 'СИГНАЛ ПОТЕРЯН'}</p>
-      <h1>{shipCompleted ? 'Транспорт 7-Альфа изучен' : success ? 'Добыча доставлена' : 'Экспедиция сорвана'}</h1>
+      <h1>{shipCompleted ? `${ship.name} изучен` : success ? 'Добыча доставлена' : 'Экспедиция сорвана'}</h1>
       <p className="result-reason">{result.reason}</p>
+      {result.completionReward > 0 && <div className="completion-reward"><span>НАГРАДА ЗА ИССЛЕДОВАНИЕ</span><strong>+{result.completionReward} лома</strong><small>Открыты новые навыки, инструменты и маршрут к «Гефесту-9»</small></div>}
       <div className="result-total"><span>ЗАЧИСЛЕНО</span><strong>+{result.scrapBanked}</strong><small>лома</small></div>
       <div className="result-stats">
         <div><span>Найдено</span><strong>{result.scrapFound}</strong></div>

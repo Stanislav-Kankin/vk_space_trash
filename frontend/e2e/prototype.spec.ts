@@ -122,8 +122,85 @@ test('finishing the last room unlocks the next route after evacuation', async ({
 
   await expect(page.getByRole('heading', { name: 'Транспорт 7-Альфа изучен' })).toBeVisible()
   await expect(page.getByText('Обнаружен маршрут к следующему объекту')).toBeVisible()
+  await expect(page.getByText('+50 лома')).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/ship-complete-result.png' })
+  await page.getByRole('button', { name: 'Вернуться в ангар' }).click()
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  await expect(page.getByRole('button', { name: 'Исследовать промышленный переработчик Гефест-9' })).toBeEnabled()
+})
+
+test('equips two tools and opens the 6 by 6 Hephaestus deck', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript(() => {
+    localStorage.setItem('cosmic-scavenger-progress', JSON.stringify({
+      version: 3,
+      state: {
+        bankedScrap: 200,
+        upgrades: {
+          hull: 0,
+          battery: 0,
+          scanner: 0,
+          trapSense: 0,
+          salvageBonus: 0,
+          toolDurability: 0,
+          emergencyCapacitor: 0,
+          cargoStabilizer: 0,
+          shieldAmplifier: 0,
+        },
+        tools: {
+          mechanic: { owned: true, durability: 12 },
+          laser: { owned: false, durability: 0 },
+          grapple: { owned: false, durability: 0 },
+          diagnostic: { owned: false, durability: 0 },
+          decoder: { owned: false, durability: 0 },
+          sealant: { owned: false, durability: 0 },
+        },
+        loadout: ['mechanic'],
+        claimedCompletionRewards: ['transport-7-alpha'],
+        shipProgress: {
+          'transport-7-alpha': { visitedRoomIds: ['4:2'], resolvedRoomIds: ['4:2'], completed: true },
+          'hephaestus-9': { visitedRoomIds: ['5:3'], resolvedRoomIds: ['5:3'], completed: false },
+        },
+      },
+    }))
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await page.getByRole('button', { name: 'Инструменты' }).click()
+
+  const laser = page.getByRole('article').filter({ hasText: 'Лазерный резак' })
+  await laser.getByRole('button', { name: /Купить/ }).click()
+  await laser.getByRole('button', { name: 'В комплект' }).click()
+  await expect(page.getByText('2/2')).toBeVisible()
+  await page.screenshot({ path: 'test-results/visual/tool-workshop.png' })
+
+  await page.getByRole('button', { name: 'Вернуться в ангар' }).click()
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  await page.getByRole('button', { name: 'Исследовать промышленный переработчик Гефест-9' }).click()
+  await expect(page.getByRole('heading', { name: 'Промышленный переработчик' })).toBeVisible()
+  await page.getByRole('button', { name: 'Стыковаться' }).click()
+  await expect(page.getByRole('heading', { name: 'Промышленный переработчик' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Стыковочный шлюз' })).toBeVisible()
+  await page.waitForTimeout(450)
+  await page.screenshot({ path: 'test-results/visual/hephaestus-airlock.png' })
+
+  await page.getByRole('button', { name: 'Открыть схему палубы' }).click()
+  const map = page.getByRole('grid', { name: 'Карта корабля Гефест-9' })
+  await expect(map).toBeVisible()
+  await expect(map.getByRole('gridcell')).toHaveCount(36)
+  await page.waitForTimeout(450)
+  await page.screenshot({ path: 'test-results/visual/hephaestus-map.png' })
+  await page.getByRole('button', { name: 'Закрыть схему' }).click()
+
+  await page.locator('[data-destination-id="5:4"]').click()
+  await page.getByRole('button', { name: 'Осмотреть контейнер' }).click()
+  await page.getByRole('button', { name: /Вскрыть контейнер Инструмент механика/ }).click()
+  await expect(page.getByText(/Инструмент механика: −1 прочности/)).toBeVisible()
+  await page.locator('[data-destination-id="5:5"]').click()
+  await expect(page.getByText(/d20 \d+ \+ чутьё 0 = \d+ против 22/)).toBeVisible()
+  await page.waitForTimeout(450)
+  await page.screenshot({ path: 'test-results/visual/hephaestus-trap.png' })
 })
 
 test('VK mobile controls leave room for the platform close button', async ({ page }) => {
@@ -152,6 +229,12 @@ test('desktop VK iframe uses a wide layout without page scrolling', async ({ pag
   expect((upgradesButton?.y ?? 701) + (upgradesButton?.height ?? 0)).toBeLessThanOrEqual(700)
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(700)
   await page.screenshot({ path: 'test-results/visual/desktop-vk-hangar.png' })
+
+  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await expect(page.getByRole('heading', { name: 'Модули корабля' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(700)
+  await page.screenshot({ path: 'test-results/visual/desktop-vk-workshop.png' })
+  await page.getByRole('button', { name: 'Вернуться в ангар' }).click()
 
   await page.getByRole('button', { name: /Начать вылазку/i }).click()
   await expect(page.getByRole('heading', { name: 'Карта сектора' })).toBeVisible()
@@ -183,12 +266,12 @@ test('alpha progress and preferences survive reload and can be reset', async ({ 
   await page.getByRole('button', { name: 'Улучшения корабля' }).click()
   const battery = page.getByRole('article').filter({ hasText: 'Резервная батарея' })
   await battery.getByRole('button').click()
-  await expect(battery.getByText('УР. 1/3')).toBeVisible()
+  await expect(battery.getByText('УР. 1/10')).toBeVisible()
 
   await page.reload()
   await expect(page.getByRole('button', { name: 'Включить звук' })).toBeVisible()
   await page.getByRole('button', { name: 'Улучшения корабля' }).click()
-  await expect(page.getByRole('article').filter({ hasText: 'Резервная батарея' }).getByText('УР. 1/3')).toBeVisible()
+  await expect(page.getByRole('article').filter({ hasText: 'Резервная батарея' }).getByText('УР. 1/10')).toBeVisible()
   await page.getByRole('button', { name: 'Вернуться в ангар' }).click()
   await page.getByRole('button', { name: 'Настройки' }).click()
   await expect(page.getByText(/СБОРКА /)).toBeVisible()
@@ -234,7 +317,7 @@ test('completes a risky expedition and extracts at the starting airlock', async 
   await page.screenshot({ path: 'test-results/visual/airlock-location.png' })
 
   await page.getByRole('button', { name: 'Открыть схему палубы' }).click()
-  await expect(page.getByRole('grid', { name: 'Карта заброшенного корабля' })).toBeVisible()
+  await expect(page.getByRole('grid', { name: /Карта корабля/ })).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/expedition-map.png' })
   await page.getByRole('button', { name: 'Закрыть схему' }).click()
@@ -246,10 +329,10 @@ test('completes a risky expedition and extracts at the starting airlock', async 
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/cargo-location.png' })
   await page.getByRole('button', { name: 'Осмотреть контейнер' }).click()
-  await expect(page.getByRole('button', { name: /Вскрыть контейнер/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Вскрыть контейнер Инструмент механика/i })).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/storage-event.png' })
-  await page.getByRole('button', { name: /Вскрыть контейнер/i }).click()
+  await page.getByRole('button', { name: /Вскрыть контейнер Инструмент механика/i }).click()
 
   await page.locator('[data-destination-id="3:1"]').click()
   await page.locator('[data-destination-id="2:1"]').click()
