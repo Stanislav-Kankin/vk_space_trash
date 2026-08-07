@@ -1772,26 +1772,25 @@
 @media (min-width: 760px) {
   .game-shell {
     width: min(100%, 1100px);
-    min-height: 100vh;
-    min-height: 100svh;
+    min-height: 0;
     margin-block: 0;
     border-inline: 1px solid #344348;
   }
 
   .screen-frame,
   .screen {
-    min-height: 100vh;
-    min-height: 100svh;
+    min-height: 0;
   }
 
   .hangar-screen {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;
+    height: clamp(560px, var(--vk-viewport-height, 680px), 760px);
   }
 
   .hangar-visual {
-    min-height: 100vh;
-    min-height: 100svh;
+    height: 100%;
+    min-height: 0;
     max-height: none;
     border-right: 1px solid #5c4828;
     border-bottom: 0;
@@ -1838,11 +1837,9 @@
   .expedition-screen {
     display: grid;
     grid-template-columns: minmax(0, 1.7fr) minmax(310px, 0.8fr);
-    grid-template-rows: auto auto minmax(330px, 1fr) auto;
-    height: 100vh;
-    height: 100svh;
-    min-height: 100vh;
-    min-height: 100svh;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    height: clamp(560px, var(--vk-viewport-height, 680px), 760px);
+    min-height: 0;
     padding-bottom: 0;
   }
 

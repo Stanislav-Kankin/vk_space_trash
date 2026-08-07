@@ -69,6 +69,8 @@ test('desktop VK iframe uses a wide layout without page scrolling', async ({ pag
   const consolePanel = await page.locator('.hangar-console').boundingBox()
   expect(hangar?.width).toBeGreaterThan(900)
   expect(visual?.x).toBeLessThan(consolePanel?.x ?? 0)
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(800)
+  await page.screenshot({ path: 'test-results/visual/desktop-vk-hangar.png' })
 
   await page.getByRole('button', { name: /Начать вылазку/i }).click()
   const stage = await page.locator('.location-stage').boundingBox()
