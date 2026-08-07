@@ -2,7 +2,7 @@
 
 Мобильная игра для VK Mini Apps о коротких рискованных вылазках на заброшенные корабли. Игрок исследует отсеки, собирает лом и должен вернуться к стартовому шлюзу, чтобы сохранить добычу.
 
-Сейчас реализована Фаза 1: интерактивный frontend-прототип на моковых данных. VK, backend, PostgreSQL и production-инфраструктура появятся на следующих согласованных этапах.
+Сейчас реализованы Фаза 1 и локальная подготовка закрытой альфы: интерактивный frontend-прототип на моковых данных, VK runtime-адаптация и production frontend-контейнер. Backend, проверка VK-подписи и PostgreSQL появятся на следующем согласованном этапе.
 
 ## Локальный запуск
 
@@ -33,3 +33,13 @@ npm run build
 5. Вернуться в стартовый шлюз и эвакуироваться с добычей.
 
 Основные решения зафиксированы в [GAME_DESIGN.md](docs/GAME_DESIGN.md), [ART_DIRECTION.md](docs/ART_DIRECTION.md) и [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Docker smoke-test
+
+```powershell
+docker compose build
+docker compose up -d
+curl http://127.0.0.1:8088/healthz
+```
+
+Порядок закрытого VK-деплоя описан в [DEPLOYMENT.md](docs/DEPLOYMENT.md).

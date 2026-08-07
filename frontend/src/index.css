@@ -16,6 +16,14 @@
   --amber-dim: #7a5823;
   --red: #f0645b;
   --green: #63d9a0;
+  --vk-inset-top: 0px;
+  --vk-inset-right: 0px;
+  --vk-inset-bottom: 0px;
+  --vk-inset-left: 0px;
+  --safe-top: max(env(safe-area-inset-top), var(--vk-inset-top));
+  --safe-right: max(env(safe-area-inset-right), var(--vk-inset-right));
+  --safe-bottom: max(env(safe-area-inset-bottom), var(--vk-inset-bottom));
+  --safe-left: max(env(safe-area-inset-left), var(--vk-inset-left));
   letter-spacing: 0;
 }
 

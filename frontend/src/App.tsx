@@ -31,7 +31,37 @@ import { gameAudio } from './audio'
 import { roomCopy, START_ROOM_ID, upgrades } from './game/content'
 import { getRoomState, useGameStore } from './game/store'
 import type { ExpeditionRun, Room, RoomKind, UpgradeKey } from './game/types'
+import { setVKSwipeBack, VK_VISIBILITY_EVENT } from './vkRuntime'
 import './App.css'
+
+const BUILD_VERSION = import.meta.env.VITE_BUILD_VERSION || 'local'
+const SOUND_PREFERENCE = 'cosmic-scavenger-sound'
+const MOTION_PREFERENCE = 'cosmic-scavenger-reduced-motion'
+const preloadUrls = [hangarImage, airlockImage, cargoImage, enemyImage, hazardImage, repairImage]
+
+const readBooleanPreference = (key: string, fallback: boolean) => {
+  try {
+    const value = window.localStorage.getItem(key)
+    return value === null ? fallback : value === 'true'
+  } catch {
+    return fallback
+  }
+}
+
+const writeBooleanPreference = (key: string, value: boolean) => {
+  try {
+    window.localStorage.setItem(key, String(value))
+  } catch {
+    // The game remains usable when storage is unavailable in a private webview.
+  }
+}
+
+const preloadImage = (url: string) => new Promise<void>((resolve) => {
+  const image = new Image()
+  image.onload = () => resolve()
+  image.onerror = () => resolve()
+  image.src = url
+})
 
 const roomIcons: Record<RoomKind, ReactNode> = {
   start: <Icon20DoorArrowRightOutline />,
@@ -615,11 +645,27 @@ function ResultScreen() {
   )
 }
 
-function SettingsSheet({ open, onClose, sound, onSound }: { open: boolean; onClose: () => void; sound: boolean; onSound: () => void }) {
-  const [reducedMotion, setReducedMotion] = useState(false)
+function SettingsSheet({
+  open,
+  onClose,
+  sound,
+  onSound,
+  reducedMotion,
+  onReducedMotion,
+}: {
+  open: boolean
+  onClose: () => void
+  sound: boolean
+  onSound: () => void
+  reducedMotion: boolean
+  onReducedMotion: () => void
+}) {
+  const resetProgress = useGameStore((state) => state.resetProgress)
+  const [confirmReset, setConfirmReset] = useState(false)
+
   useEffect(() => {
-    document.documentElement.dataset.reduceMotion = reducedMotion ? 'true' : 'false'
-  }, [reducedMotion])
+    if (!open) setConfirmReset(false)
+  }, [open])
 
   return (
     <AnimatePresence>
@@ -629,7 +675,24 @@ function SettingsSheet({ open, onClose, sound, onSound }: { open: boolean; onClo
             <div className="sheet-handle" />
             <h2>Системы борта</h2>
             <label><span>Звук и атмосфера<small>Механизмы, сигналы и фон корабля</small></span><input type="checkbox" checked={sound} onChange={onSound} /></label>
-            <label><span>Меньше движения<small>Сократить анимации</small></span><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /></label>
+            <label><span>Меньше движения<small>Сократить анимации</small></span><input type="checkbox" checked={reducedMotion} onChange={onReducedMotion} /></label>
+            <button
+              className={`reset-progress ${confirmReset ? 'confirm' : ''}`}
+              type="button"
+              onClick={() => {
+                if (!confirmReset) {
+                  gameAudio.play('ui')
+                  setConfirmReset(true)
+                  return
+                }
+                resetProgress()
+                setConfirmReset(false)
+                onClose()
+              }}
+            >
+              {confirmReset ? 'Подтвердить сброс' : 'Сбросить альфа-прогресс'}
+            </button>
+            <div className="build-info"><span>ЗАКРЫТАЯ АЛЬФА</span><code>СБОРКА {BUILD_VERSION}</code></div>
             <button className="secondary-action" type="button" onClick={onClose}>Готово</button>
           </motion.section>
         </motion.div>
@@ -640,33 +703,67 @@ function SettingsSheet({ open, onClose, sound, onSound }: { open: boolean; onClo
 
 function App() {
   const [booted, setBooted] = useState(false)
-  const [sound, setSound] = useState(true)
+  const [sound, setSound] = useState(() => readBooleanPreference(SOUND_PREFERENCE, true))
+  const [reducedMotion, setReducedMotion] = useState(() => readBooleanPreference(MOTION_PREFERENCE, false))
   const [settingsOpen, setSettingsOpen] = useState(false)
   const screen = useGameStore((state) => state.screen)
 
   const toggleSound = () => {
     setSound((value) => {
       const next = !value
+      writeBooleanPreference(SOUND_PREFERENCE, next)
       gameAudio.setEnabled(next)
       if (next) gameAudio.play('ui')
       return next
     })
   }
 
+  const toggleReducedMotion = () => {
+    setReducedMotion((value) => {
+      const next = !value
+      writeBooleanPreference(MOTION_PREFERENCE, next)
+      return next
+    })
+  }
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setBooted(true), 850)
-    return () => window.clearTimeout(timer)
+    let active = true
+    const minimumDelay = new Promise<void>((resolve) => window.setTimeout(resolve, 650))
+    const preloadTimeout = new Promise<void>((resolve) => window.setTimeout(resolve, 4_000))
+    const preload = Promise.all(preloadUrls.map(preloadImage)).then(() => undefined)
+    void Promise.all([minimumDelay, Promise.race([preload, preloadTimeout])]).then(() => {
+      if (active) setBooted(true)
+    })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' })
+    void setVKSwipeBack(screen !== 'expedition')
   }, [screen])
 
   useEffect(() => {
-    if (screen === 'expedition' && sound) gameAudio.startAmbience()
-    else gameAudio.stopAmbience()
-    return () => gameAudio.stopAmbience()
-  }, [screen, sound])
+    gameAudio.setEnabled(sound)
+    document.documentElement.dataset.reduceMotion = reducedMotion ? 'true' : 'false'
+
+    const syncAudio = (visible: boolean) => {
+      if (visible && screen === 'expedition' && sound) gameAudio.startAmbience()
+      else gameAudio.stopAmbience()
+    }
+    const handleDocumentVisibility = () => syncAudio(!document.hidden)
+    const handleVKVisibility = (event: Event) => {
+      syncAudio((event as CustomEvent<{ visible: boolean }>).detail.visible)
+    }
+
+    syncAudio(!document.hidden)
+    document.addEventListener('visibilitychange', handleDocumentVisibility)
+    window.addEventListener(VK_VISIBILITY_EVENT, handleVKVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', handleDocumentVisibility)
+      window.removeEventListener(VK_VISIBILITY_EVENT, handleVKVisibility)
+      gameAudio.stopAmbience()
+    }
+  }, [screen, sound, reducedMotion])
 
   if (!booted) return <LoadingScreen />
 
@@ -680,7 +777,14 @@ function App() {
           {screen === 'result' && <ResultScreen />}
         </motion.div>
       </AnimatePresence>
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} sound={sound} onSound={toggleSound} />
+      <SettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        sound={sound}
+        onSound={toggleSound}
+        reducedMotion={reducedMotion}
+        onReducedMotion={toggleReducedMotion}
+      />
     </main>
   )
 }

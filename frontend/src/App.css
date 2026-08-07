@@ -214,7 +214,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: max(10px, env(safe-area-inset-top)) 14px 10px;
+  padding: max(10px, var(--safe-top)) max(14px, var(--safe-right)) 10px max(14px, var(--safe-left));
 }
 
 .call-sign,
@@ -319,7 +319,7 @@
 .hangar-console {
   position: relative;
   z-index: 2;
-  padding: 0 16px max(18px, env(safe-area-inset-bottom));
+  padding: 0 max(16px, var(--safe-right)) max(18px, var(--safe-bottom)) max(16px, var(--safe-left));
   background-color: #0a1012;
   background-image: repeating-linear-gradient(135deg, transparent 0, transparent 8px, rgba(240, 179, 74, 0.018) 9px);
 }
@@ -387,7 +387,7 @@
 
 /* Upgrades */
 .upgrades-screen {
-  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  padding-bottom: max(24px, var(--safe-bottom));
   background-color: #0d1416;
   background-image:
     repeating-linear-gradient(90deg, transparent 0, transparent 67px, rgba(88, 215, 223, 0.025) 68px),
@@ -399,7 +399,7 @@
   grid-template-columns: 44px 1fr auto;
   gap: 12px;
   align-items: center;
-  padding: max(14px, env(safe-area-inset-top)) 14px 14px;
+  padding: max(14px, var(--safe-top)) max(14px, var(--safe-right)) 14px max(14px, var(--safe-left));
   border-bottom: 1px solid #2b393c;
   background: rgba(10, 16, 18, 0.95);
 }
@@ -539,7 +539,7 @@
 .expedition-screen {
   display: flex;
   flex-direction: column;
-  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  padding-bottom: max(14px, var(--safe-bottom));
   background-color: #091012;
   background-image:
     repeating-linear-gradient(90deg, transparent 0, transparent 51px, rgba(88, 215, 223, 0.025) 52px),
@@ -550,7 +550,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: max(14px, env(safe-area-inset-top)) 16px 12px;
+  padding: max(14px, var(--safe-top)) max(16px, var(--safe-right)) 12px max(16px, var(--safe-left));
   border-bottom: 1px solid #26363a;
 }
 
@@ -1011,7 +1011,7 @@
   width: 100%;
   max-height: 88%;
   overflow-y: auto;
-  padding: 0 14px max(18px, env(safe-area-inset-bottom));
+  padding: 0 max(14px, var(--safe-right)) max(18px, var(--safe-bottom)) max(14px, var(--safe-left));
   background: #0d1517;
   border-top: 1px solid #4b6368;
   box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.62);
@@ -1295,7 +1295,7 @@
 .event-sheet,
 .settings-sheet {
   width: 100%;
-  padding: 10px 18px max(18px, env(safe-area-inset-bottom));
+  padding: 10px max(18px, var(--safe-right)) max(18px, var(--safe-bottom)) max(18px, var(--safe-left));
   background: #131c1f;
   border-top: 1px solid #4b6368;
   box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.62);
@@ -1391,7 +1391,7 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+  padding: max(18px, var(--safe-top)) max(16px, var(--safe-right)) max(18px, var(--safe-bottom)) max(16px, var(--safe-left));
   overflow: hidden;
   background: #080d0f;
 }
@@ -1555,7 +1555,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: max(30px, env(safe-area-inset-top)) 18px max(22px, env(safe-area-inset-bottom));
+  padding: max(30px, var(--safe-top)) max(18px, var(--safe-right)) max(22px, var(--safe-bottom)) max(18px, var(--safe-left));
   text-align: center;
   background-color: #0b1214;
   background-image:
@@ -1652,6 +1652,11 @@
   transform: translateX(-50%);
 }
 
+.settings-sheet {
+  max-height: 92svh;
+  overflow-y: auto;
+}
+
 .settings-sheet h2 { margin-bottom: 18px; }
 
 .settings-sheet label {
@@ -1706,6 +1711,36 @@
   background: #d6f7f8;
   transform: translateX(18px);
 }
+
+.reset-progress {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  color: #c5d0cf;
+  background: transparent;
+  border: 1px solid #435358;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.reset-progress.confirm {
+  color: #ffd1cd;
+  background: #251514;
+  border-color: #7f3f3a;
+}
+
+.build-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 8px;
+}
+
+.build-info span { color: var(--amber); }
+.build-info code { font: inherit; }
 
 .settings-sheet .secondary-action {
   width: 100%;

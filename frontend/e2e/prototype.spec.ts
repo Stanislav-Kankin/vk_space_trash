@@ -48,6 +48,31 @@ test('workshop remains readable on the smallest viewport', async ({ page }) => {
   await page.screenshot({ path: 'test-results/visual/upgrades-320x568.png' })
 })
 
+test('alpha progress and preferences survive reload and can be reset', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?vk_platform=mobile_android&vk_app_id=101')
+  await expect(page.getByRole('button', { name: /Начать вылазку/i })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.vkPlatform)).toBe('mobile_android')
+  await expect.poll(() => page.evaluate(() => performance.getEntriesByType('resource').filter((entry) => entry.name.includes('room-')).length)).toBeGreaterThanOrEqual(5)
+
+  await page.getByRole('button', { name: 'Выключить звук' }).click()
+  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  const battery = page.getByRole('article').filter({ hasText: 'Резервная батарея' })
+  await battery.getByRole('button').click()
+  await expect(battery.getByText('УР. 1/3')).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Включить звук' })).toBeVisible()
+  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await expect(page.getByRole('article').filter({ hasText: 'Резервная батарея' }).getByText('УР. 1/3')).toBeVisible()
+  await page.getByRole('button', { name: 'Вернуться в ангар' }).click()
+  await page.getByRole('button', { name: 'Настройки' }).click()
+  await expect(page.getByText(/СБОРКА /)).toBeVisible()
+  await page.getByRole('button', { name: 'Сбросить альфа-прогресс' }).click()
+  await page.getByRole('button', { name: 'Подтвердить сброс' }).click()
+  await expect(page.getByText('32', { exact: true })).toBeVisible()
+})
+
 test('hazard and repair rooms remain part of one deck route', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')

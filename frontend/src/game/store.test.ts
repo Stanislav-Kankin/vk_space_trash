@@ -4,6 +4,7 @@ import { useGameStore } from './store'
 
 describe('mock expedition state', () => {
   beforeEach(() => {
+    localStorage.clear()
     useGameStore.setState(useGameStore.getInitialState(), true)
   })
 
@@ -54,5 +55,18 @@ describe('mock expedition state', () => {
     useGameStore.getState().purchaseUpgrade('battery')
     expect(useGameStore.getState().upgrades.battery).toBe(1)
     expect(useGameStore.getState().bankedScrap).toBe(22)
+    expect(localStorage.getItem('cosmic-scavenger-progress')).toContain('"battery":1')
+  })
+
+  it('resets only the persisted alpha progress', () => {
+    useGameStore.getState().purchaseUpgrade('battery')
+    useGameStore.getState().startRun()
+    useGameStore.getState().resetProgress()
+
+    const state = useGameStore.getState()
+    expect(state.screen).toBe('hangar')
+    expect(state.bankedScrap).toBe(32)
+    expect(state.upgrades).toEqual({ hull: 0, battery: 0, scanner: 0 })
+    expect(state.run).toBeNull()
   })
 })

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import { createRooms, START_ROOM_ID, upgrades } from './content'
 import type {
   ExpeditionResult,
@@ -24,7 +25,11 @@ interface GameState {
   extract: () => void
   purchaseUpgrade: (key: UpgradeKey) => void
   clearNotice: () => void
+  resetProgress: () => void
 }
+
+const DEFAULT_BANKED_SCRAP = 32
+const DEFAULT_UPGRADES: Record<UpgradeKey, number> = { hull: 0, battery: 0, scanner: 0 }
 
 const adjacent = (a: Room, b: Room) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1
 
@@ -55,10 +60,10 @@ const endFailedRun = (run: ExpeditionRun, reason: string, bankedScrap: number) =
   }
 }
 
-export const useGameStore = create<GameState>((set, get) => ({
+export const useGameStore = create<GameState>()(persist((set, get) => ({
   screen: 'hangar',
-  bankedScrap: 32,
-  upgrades: { hull: 0, battery: 0, scanner: 0 },
+  bankedScrap: DEFAULT_BANKED_SCRAP,
+  upgrades: { ...DEFAULT_UPGRADES },
   run: null,
   result: null,
 
@@ -241,4 +246,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     const run = get().run
     if (run) set({ run: { ...run, notice: null } })
   },
+
+  resetProgress: () => set({
+    screen: 'hangar',
+    bankedScrap: DEFAULT_BANKED_SCRAP,
+    upgrades: { ...DEFAULT_UPGRADES },
+    run: null,
+    result: null,
+  }),
+}), {
+  name: 'cosmic-scavenger-progress',
+  version: 1,
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    bankedScrap: state.bankedScrap,
+    upgrades: state.upgrades,
+  }),
 }))
