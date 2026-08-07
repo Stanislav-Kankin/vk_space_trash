@@ -1,4 +1,12 @@
-export type Screen = 'hangar' | 'upgrades' | 'expedition' | 'result'
+export type Screen = 'hangar' | 'upgrades' | 'starmap' | 'expedition' | 'result'
+
+export type ShipId = 'transport-7-alpha'
+
+export interface ShipProgress {
+  visitedRoomIds: string[]
+  resolvedRoomIds: string[]
+  completed: boolean
+}
 
 export type RoomKind = 'start' | 'empty' | 'storage' | 'hazard' | 'enemy' | 'repair'
 
@@ -21,6 +29,7 @@ export interface CombatState {
 }
 
 export interface ExpeditionRun {
+  shipId: ShipId
   hull: number
   maxHull: number
   energy: number

@@ -21,6 +21,21 @@
 
 Фоновое изображение ангара сгенерировано специально для проекта встроенным image generation tool. Оно сохранено как `frontend/src/assets/scavenger-hangar.webp`.
 
+Панорама карты сектора также сгенерирована специально для проекта и сохранена как `frontend/src/assets/galaxy-sector-map.webp`.
+
+## Sector map asset prompt
+
+```text
+Use case: stylized-concept
+Asset type: wide interactive star-map background for a sci-fi scavenger game UI
+Primary request: a cinematic deep-space panorama showing a navigable star region with a dense galactic dust lane, distant nebulae, sparse stars, subtle planetary silhouettes, and faint wreckage fields
+Style/medium: high-end realistic science-fiction concept art, matching a gritty industrial derelict-spaceship game, restrained and believable rather than colorful fantasy
+Composition/framing: very wide landscape panorama, visual flow from left to right for horizontal panning, one brighter navigable region slightly left of center, two dim distant regions toward the right, generous dark negative space where UI ship nodes can sit
+Lighting/mood: cold cyan starlight, small amber navigation glows, deep black space, ominous but inviting exploration
+Color palette: charcoal black, steel blue, muted cyan, small amber accents; avoid purple-dominated palette
+Constraints: background only, no interface, no labels, no text, no logos, no watermark, no large foreground spaceship, no decorative gradient blobs
+```
+
 ## Hangar asset prompt
 
 ```text

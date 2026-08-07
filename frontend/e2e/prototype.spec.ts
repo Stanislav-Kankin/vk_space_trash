@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 
 const viewports = [
@@ -11,6 +11,13 @@ const viewports = [
 test.beforeAll(async () => {
   await mkdir('test-results/visual', { recursive: true })
 })
+
+const launchExpedition = async (page: Page) => {
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  await expect(page.getByRole('heading', { name: 'Карта сектора' })).toBeVisible()
+  await page.getByRole('button', { name: 'Стыковаться' }).click()
+  await expect(page.getByRole('heading', { name: 'Стыковочный шлюз' })).toBeVisible()
+}
 
 for (const viewport of viewports) {
   test(`hangar fits ${viewport.width}x${viewport.height}`, async ({ page }) => {
@@ -29,8 +36,7 @@ for (const viewport of viewports) {
 
     await page.screenshot({ path: `test-results/visual/hangar-${viewport.width}x${viewport.height}.png` })
 
-    await page.getByRole('button', { name: /Начать вылазку/i }).click()
-    await expect(page.getByRole('heading', { name: 'Стыковочный шлюз' })).toBeVisible()
+    await launchExpedition(page)
     await page.waitForTimeout(450)
     const explorationWidth = await page.evaluate(() => document.documentElement.scrollWidth)
     expect(explorationWidth).toBeLessThanOrEqual(viewport.width)
@@ -48,16 +54,52 @@ test('workshop remains readable on the smallest viewport', async ({ page }) => {
   await page.screenshot({ path: 'test-results/visual/upgrades-320x568.png' })
 })
 
+test('sector map pans horizontally and keeps the first ship selectable', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  await expect(page.getByRole('heading', { name: 'Карта сектора' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Исследовать транспорт 7-Альфа/i })).toBeVisible()
+  await expect(page.getByText('1 ИЗ 19 ОТСЕКОВ')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Стыковаться' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+
+  const viewport = page.locator('.star-map-viewport')
+  expect(await viewport.evaluate((element) => element.scrollLeft)).toBe(0)
+  await page.getByRole('button', { name: 'Сдвинуть карту вправо' }).click()
+  await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+  await page.screenshot({ path: 'test-results/visual/star-map-mobile.png' })
+})
+
+test('evacuated survey progress is restored on the same ship', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await launchExpedition(page)
+
+  await page.locator('[data-destination-id="4:1"]').click()
+  await page.getByRole('button', { name: 'Осмотреть контейнер' }).click()
+  await page.getByRole('button', { name: 'Оставить как есть' }).click()
+  await page.locator('[data-destination-id="4:2"]').click()
+  await page.getByRole('button', { name: /Эвакуироваться/i }).click()
+  await page.getByRole('button', { name: 'Вернуться в ангар' }).click()
+  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+
+  await expect(page.getByText('2 ИЗ 19 ОТСЕКОВ')).toBeVisible()
+  await page.getByRole('button', { name: 'Стыковаться' }).click()
+  await page.getByRole('button', { name: 'Открыть схему палубы' }).click()
+  await expect(page.locator('[data-room-id="4:1"]')).toHaveClass(/visited/)
+})
+
 test('VK mobile controls leave room for the platform close button', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?vk_platform=mobile_android&vk_app_id=54711325')
 
   const hangarRightPadding = await page.locator('.top-bar').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingRight))
-  expect(hangarRightPadding).toBeGreaterThanOrEqual(76)
+  expect(hangarRightPadding).toBeGreaterThanOrEqual(88)
 
-  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  await launchExpedition(page)
   const expeditionRightPadding = await page.locator('.expedition-header').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingRight))
-  expect(expeditionRightPadding).toBeGreaterThanOrEqual(76)
+  expect(expeditionRightPadding).toBeGreaterThanOrEqual(88)
 })
 
 test('desktop VK iframe uses a wide layout without page scrolling', async ({ page }) => {
@@ -76,6 +118,12 @@ test('desktop VK iframe uses a wide layout without page scrolling', async ({ pag
   await page.screenshot({ path: 'test-results/visual/desktop-vk-hangar.png' })
 
   await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  await expect(page.getByRole('heading', { name: 'Карта сектора' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(700)
+  await page.waitForTimeout(450)
+  await page.screenshot({ path: 'test-results/visual/desktop-vk-star-map.png' })
+  await page.getByRole('button', { name: 'Стыковаться' }).click()
+  await expect(page.getByRole('heading', { name: 'Стыковочный шлюз' })).toBeVisible()
   const stage = await page.locator('.location-stage').boundingBox()
   const navigation = await page.locator('.room-navigation').boundingBox()
   expect(stage?.x).toBeLessThan(navigation?.x ?? 0)
@@ -116,7 +164,7 @@ test('alpha progress and preferences survive reload and can be reset', async ({ 
 test('hazard and repair rooms remain part of one deck route', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await page.getByRole('button', { name: /Начать вылазку/i }).click()
+  await launchExpedition(page)
 
   await page.getByRole('button', { name: 'Выключить звук' }).click()
   await expect(page.getByRole('button', { name: 'Включить звук' })).toBeVisible()
@@ -145,8 +193,7 @@ test('hazard and repair rooms remain part of one deck route', async ({ page }) =
 test('completes a risky expedition and extracts at the starting airlock', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await page.getByRole('button', { name: /Начать вылазку/i }).click()
-  await expect(page.getByRole('heading', { name: 'Стыковочный шлюз' })).toBeVisible()
+  await launchExpedition(page)
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/airlock-location.png' })
 

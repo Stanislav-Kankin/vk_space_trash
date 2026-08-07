@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { START_ROOM_ID } from './content'
+import { FIRST_SHIP_ID, SHIP_ROOM_COUNT, START_ROOM_ID } from './content'
 import { useGameStore } from './store'
 
 describe('mock expedition state', () => {
@@ -17,6 +17,26 @@ describe('mock expedition state', () => {
     expect(run?.previousRoomId).toBeNull()
     expect(run?.hull).toBe(12)
     expect(run?.energy).toBe(14)
+  })
+
+  it('migrates version 1 progress without losing scrap or upgrades', async () => {
+    localStorage.setItem('cosmic-scavenger-progress', JSON.stringify({
+      version: 1,
+      state: {
+        bankedScrap: 57,
+        upgrades: { hull: 1, battery: 2, scanner: 0 },
+      },
+    }))
+
+    await useGameStore.persist.rehydrate()
+    const state = useGameStore.getState()
+    expect(state.bankedScrap).toBe(57)
+    expect(state.upgrades).toEqual({ hull: 1, battery: 2, scanner: 0 })
+    expect(state.shipProgress[FIRST_SHIP_ID]).toEqual({
+      visitedRoomIds: [START_ROOM_ID],
+      resolvedRoomIds: [START_ROOM_ID],
+      completed: false,
+    })
   })
 
   it('allows only adjacent movement and spends one energy', () => {
@@ -51,6 +71,40 @@ describe('mock expedition state', () => {
     expect(useGameStore.getState().bankedScrap).toBe(36)
   })
 
+  it('saves surveyed rooms on extraction and restores them in the next expedition', () => {
+    useGameStore.getState().startRun()
+    useGameStore.getState().moveTo('4:1')
+    useGameStore.getState().chooseRoomAction('secondary')
+    useGameStore.getState().moveTo(START_ROOM_ID)
+    useGameStore.getState().extract()
+
+    const saved = useGameStore.getState().shipProgress[FIRST_SHIP_ID]
+    expect(saved.visitedRoomIds).toContain('4:1')
+    expect(saved.resolvedRoomIds).toContain('4:1')
+    expect(localStorage.getItem('cosmic-scavenger-progress')).toContain('4:1')
+
+    useGameStore.getState().startRun()
+    const restoredRoom = useGameStore.getState().run?.rooms.find((room) => room.id === '4:1')
+    expect(restoredRoom).toMatchObject({ visited: true, resolved: true })
+  })
+
+  it('marks the first ship complete after every room is surveyed and evacuated', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: START_ROOM_ID,
+        rooms: run.rooms.map((room) => ({ ...room, visited: true, resolved: true })),
+      },
+    })
+    useGameStore.getState().extract()
+
+    const progress = useGameStore.getState().shipProgress[FIRST_SHIP_ID]
+    expect(progress.completed).toBe(true)
+    expect(progress.visitedRoomIds).toHaveLength(SHIP_ROOM_COUNT)
+  })
+
   it('purchases an affordable permanent upgrade', () => {
     useGameStore.getState().purchaseUpgrade('battery')
     expect(useGameStore.getState().upgrades.battery).toBe(1)
@@ -67,6 +121,11 @@ describe('mock expedition state', () => {
     expect(state.screen).toBe('hangar')
     expect(state.bankedScrap).toBe(32)
     expect(state.upgrades).toEqual({ hull: 0, battery: 0, scanner: 0 })
+    expect(state.shipProgress[FIRST_SHIP_ID]).toEqual({
+      visitedRoomIds: [START_ROOM_ID],
+      resolvedRoomIds: [START_ROOM_ID],
+      completed: false,
+    })
     expect(state.run).toBeNull()
   })
 })

@@ -1,28 +1,41 @@
-import type { Room, UpgradeDefinition } from './types'
+import type { Room, ShipProgress, UpgradeDefinition } from './types'
 
 export const START_ROOM_ID = '4:2'
+export const FIRST_SHIP_ID = 'transport-7-alpha' as const
 
-export const createRooms = (): Room[] => [
-  { id: '0:1', x: 1, y: 0, kind: 'storage', visited: false, resolved: false },
-  { id: '0:2', x: 2, y: 0, kind: 'hazard', visited: false, resolved: false },
-  { id: '1:0', x: 0, y: 1, kind: 'empty', visited: false, resolved: false },
-  { id: '1:1', x: 1, y: 1, kind: 'enemy', visited: false, resolved: false },
-  { id: '1:2', x: 2, y: 1, kind: 'storage', visited: false, resolved: false },
-  { id: '1:3', x: 3, y: 1, kind: 'repair', visited: false, resolved: false },
-  { id: '2:0', x: 0, y: 2, kind: 'hazard', visited: false, resolved: false },
-  { id: '2:1', x: 1, y: 2, kind: 'storage', visited: false, resolved: false },
-  { id: '2:2', x: 2, y: 2, kind: 'empty', visited: false, resolved: false },
-  { id: '2:3', x: 3, y: 2, kind: 'enemy', visited: false, resolved: false },
-  { id: '2:4', x: 4, y: 2, kind: 'storage', visited: false, resolved: false },
-  { id: '3:0', x: 0, y: 3, kind: 'repair', visited: false, resolved: false },
-  { id: '3:1', x: 1, y: 3, kind: 'empty', visited: false, resolved: false },
-  { id: '3:2', x: 2, y: 3, kind: 'hazard', visited: false, resolved: false },
-  { id: '3:3', x: 3, y: 3, kind: 'storage', visited: false, resolved: false },
-  { id: '3:4', x: 4, y: 3, kind: 'empty', visited: false, resolved: false },
-  { id: '4:1', x: 1, y: 4, kind: 'storage', visited: false, resolved: false },
-  { id: START_ROOM_ID, x: 2, y: 4, kind: 'start', visited: true, resolved: true },
-  { id: '4:3', x: 3, y: 4, kind: 'empty', visited: false, resolved: false },
+const roomBlueprint: Omit<Room, 'visited' | 'resolved'>[] = [
+  { id: '0:1', x: 1, y: 0, kind: 'storage' },
+  { id: '0:2', x: 2, y: 0, kind: 'hazard' },
+  { id: '1:0', x: 0, y: 1, kind: 'empty' },
+  { id: '1:1', x: 1, y: 1, kind: 'enemy' },
+  { id: '1:2', x: 2, y: 1, kind: 'storage' },
+  { id: '1:3', x: 3, y: 1, kind: 'repair' },
+  { id: '2:0', x: 0, y: 2, kind: 'hazard' },
+  { id: '2:1', x: 1, y: 2, kind: 'storage' },
+  { id: '2:2', x: 2, y: 2, kind: 'empty' },
+  { id: '2:3', x: 3, y: 2, kind: 'enemy' },
+  { id: '2:4', x: 4, y: 2, kind: 'storage' },
+  { id: '3:0', x: 0, y: 3, kind: 'repair' },
+  { id: '3:1', x: 1, y: 3, kind: 'empty' },
+  { id: '3:2', x: 2, y: 3, kind: 'hazard' },
+  { id: '3:3', x: 3, y: 3, kind: 'storage' },
+  { id: '3:4', x: 4, y: 3, kind: 'empty' },
+  { id: '4:1', x: 1, y: 4, kind: 'storage' },
+  { id: START_ROOM_ID, x: 2, y: 4, kind: 'start' },
+  { id: '4:3', x: 3, y: 4, kind: 'empty' },
 ]
+
+export const SHIP_ROOM_COUNT = roomBlueprint.length
+
+export const createRooms = (progress?: ShipProgress): Room[] => {
+  const visited = new Set(progress?.visitedRoomIds ?? [START_ROOM_ID])
+  const resolved = new Set(progress?.resolvedRoomIds ?? [START_ROOM_ID])
+  return roomBlueprint.map((room) => ({
+    ...room,
+    visited: visited.has(room.id) || room.id === START_ROOM_ID,
+    resolved: resolved.has(room.id) || room.id === START_ROOM_ID,
+  }))
+}
 
 export const upgrades: readonly UpgradeDefinition[] = [
   {

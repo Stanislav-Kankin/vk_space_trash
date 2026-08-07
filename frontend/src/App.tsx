@@ -9,10 +9,13 @@ import {
   Icon20DoorArrowRightOutline,
   Icon20Flash,
   Icon20HelpOutline,
+  Icon20LockOutline,
   Icon20ShieldLineOutline,
   Icon20WarningTriangleOutline,
   Icon20WrenchOutline,
   Icon24ChevronLeft,
+  Icon24ArrowLeftOutline,
+  Icon24ArrowRightOutline,
   Icon24CompassOutline,
   Icon24CancelOutline,
   Icon24MuteOutline,
@@ -22,13 +25,14 @@ import {
 } from '@vkontakte/icons'
 import { AnimatePresence, motion } from 'motion/react'
 import hangarImage from './assets/scavenger-hangar.webp'
+import galaxyMapImage from './assets/galaxy-sector-map.webp'
 import airlockImage from './assets/room-airlock.webp'
 import cargoImage from './assets/room-cargo.webp'
 import enemyImage from './assets/room-enemy.webp'
 import hazardImage from './assets/room-hazard.webp'
 import repairImage from './assets/room-repair.webp'
 import { gameAudio } from './audio'
-import { roomCopy, START_ROOM_ID, upgrades } from './game/content'
+import { FIRST_SHIP_ID, roomCopy, SHIP_ROOM_COUNT, START_ROOM_ID, upgrades } from './game/content'
 import { getRoomState, useGameStore } from './game/store'
 import type { ExpeditionRun, Room, RoomKind, UpgradeKey } from './game/types'
 import { setVKSwipeBack, VK_VISIBILITY_EVENT } from './vkRuntime'
@@ -37,7 +41,7 @@ import './App.css'
 const BUILD_VERSION = import.meta.env.VITE_BUILD_VERSION || 'local'
 const SOUND_PREFERENCE = 'cosmic-scavenger-sound'
 const MOTION_PREFERENCE = 'cosmic-scavenger-reduced-motion'
-const preloadUrls = [hangarImage, airlockImage, cargoImage, enemyImage, hazardImage, repairImage]
+const preloadUrls = [hangarImage, galaxyMapImage, airlockImage, cargoImage, enemyImage, hazardImage, repairImage]
 
 const readBooleanPreference = (key: string, fallback: boolean) => {
   try {
@@ -170,7 +174,6 @@ function TopBar({ onSettings, sound, onSound }: { onSettings: () => void; sound:
 function HangarScreen({ onSettings, sound, onSound }: { onSettings: () => void; sound: boolean; onSound: () => void }) {
   const bankedScrap = useGameStore((state) => state.bankedScrap)
   const levels = useGameStore((state) => state.upgrades)
-  const startRun = useGameStore((state) => state.startRun)
   const setScreen = useGameStore((state) => state.setScreen)
   const installed = Object.values(levels).reduce((sum, level) => sum + level, 0)
 
@@ -195,7 +198,7 @@ function HangarScreen({ onSettings, sound, onSound }: { onSettings: () => void; 
         </div>
         <button className="primary-action launch-button" type="button" onClick={() => {
           gameAudio.play('launch')
-          startRun()
+          setScreen('starmap')
         }}>
           <Icon28Rocket />
           <span><small>МАРШРУТ ГОТОВ</small>Начать вылазку</span>
@@ -204,6 +207,73 @@ function HangarScreen({ onSettings, sound, onSound }: { onSettings: () => void; 
           <Icon20WrenchOutline /> Улучшения корабля
         </button>
       </div>
+    </section>
+  )
+}
+
+function StarMapScreen() {
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const setScreen = useGameStore((state) => state.setScreen)
+  const startRun = useGameStore((state) => state.startRun)
+  const progress = useGameStore((state) => state.shipProgress[FIRST_SHIP_ID])
+  const visitedCount = progress.visitedRoomIds.length
+  const completion = Math.round((visitedCount / SHIP_ROOM_COUNT) * 100)
+
+  const pan = (direction: -1 | 1) => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    gameAudio.play('ui')
+    viewport.scrollBy({ left: direction * Math.max(480, viewport.clientWidth * 0.7), behavior: 'smooth' })
+  }
+
+  return (
+    <section className="screen star-map-screen" aria-label="Карта звёздного сектора">
+      <header className="star-map-header">
+        <IconButton label="Вернуться в ангар" onClick={() => setScreen('hangar')}><Icon24ChevronLeft /></IconButton>
+        <div><span>НАВИГАЦИОННЫЙ КОНТУР</span><h1>Карта сектора</h1></div>
+        <div className="sector-coordinates"><span>СЕКТОР</span><strong>07 / KSA</strong></div>
+      </header>
+
+      <div className="star-map-stage">
+        <IconButton label="Сдвинуть карту влево" onClick={() => pan(-1)}><Icon24ArrowLeftOutline /></IconButton>
+        <div className="star-map-viewport" ref={viewportRef}>
+          <div className="star-map-canvas">
+            <img src={galaxyMapImage} alt="Галактический сектор с туманностями и дальними звёздами" />
+            <div className="star-map-shade" />
+            <span className="sector-route route-alpha" aria-hidden="true" />
+            <span className="sector-route route-beta" aria-hidden="true" />
+
+            <button className="ship-node active" type="button" onClick={() => startRun(FIRST_SHIP_ID)} aria-label="Исследовать транспорт 7-Альфа">
+              <span className="ship-node-signal"><Icon28Rocket /></span>
+              <span className="ship-node-copy"><small>ДОСТУПЕН</small><strong>Транспорт 7-Альфа</strong><em>{visitedCount}/{SHIP_ROOM_COUNT} отсеков</em></span>
+            </button>
+
+            <button className={`ship-node locked node-beta ${progress.completed ? 'route-detected' : ''}`} type="button" disabled>
+              <span className="ship-node-signal"><Icon20LockOutline /></span>
+              <span className="ship-node-copy"><small>{progress.completed ? 'СИГНАЛ ОБНАРУЖЕН' : 'МАРШРУТ ЗАКРЫТ'}</small><strong>Крейсер R-4</strong><em>{progress.completed ? 'Подготовка экспедиции' : 'Изучите первый объект'}</em></span>
+            </button>
+
+            <button className="ship-node locked node-gamma" type="button" disabled>
+              <span className="ship-node-signal"><Icon20LockOutline /></span>
+              <span className="ship-node-copy"><small>СИГНАЛ НЕ РАСШИФРОВАН</small><strong>Объект K-12</strong><em>Нет данных</em></span>
+            </button>
+          </div>
+        </div>
+        <IconButton label="Сдвинуть карту вправо" onClick={() => pan(1)}><Icon24ArrowRightOutline /></IconButton>
+      </div>
+
+      <footer className="star-map-selection">
+        <div className="target-summary"><span>ВЫБРАННЫЙ ОБЪЕКТ</span><h2>Заброшенный транспорт</h2><p>Реактор заглушен. Шлюз К-17 удерживает стабильный канал.</p></div>
+        <div className="survey-progress">
+          <div><span>РАЗВЕДАНО</span><strong>{completion}%</strong></div>
+          <div className="survey-track"><span style={{ width: `${completion}%` }} /></div>
+          <small>{progress.completed ? 'ОБЪЕКТ ИЗУЧЕН' : `${visitedCount} ИЗ ${SHIP_ROOM_COUNT} ОТСЕКОВ`}</small>
+        </div>
+        <button className="primary-action dock-button" type="button" onClick={() => {
+          gameAudio.play('launch')
+          startRun(FIRST_SHIP_ID)
+        }}><Icon28Rocket /><span><small>КАНАЛ СТАБИЛЕН</small>Стыковаться</span></button>
+      </footer>
     </section>
   )
 }
@@ -773,6 +843,7 @@ function App() {
         <motion.div className="screen-frame" key={screen} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
           {screen === 'hangar' && <HangarScreen onSettings={() => setSettingsOpen(true)} sound={sound} onSound={toggleSound} />}
           {screen === 'upgrades' && <UpgradesScreen />}
+          {screen === 'starmap' && <StarMapScreen />}
           {screen === 'expedition' && <ExpeditionScreen sound={sound} onSound={toggleSound} />}
           {screen === 'result' && <ResultScreen />}
         </motion.div>

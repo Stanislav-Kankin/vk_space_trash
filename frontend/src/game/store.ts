@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { createRooms, START_ROOM_ID, upgrades } from './content'
+import { createRooms, FIRST_SHIP_ID, START_ROOM_ID, upgrades } from './content'
 import type {
   ExpeditionResult,
   ExpeditionRun,
@@ -8,6 +8,8 @@ import type {
   RoomKind,
   RoomState,
   Screen,
+  ShipId,
+  ShipProgress,
   UpgradeKey,
 } from './types'
 
@@ -15,10 +17,11 @@ interface GameState {
   screen: Screen
   bankedScrap: number
   upgrades: Record<UpgradeKey, number>
+  shipProgress: Record<ShipId, ShipProgress>
   run: ExpeditionRun | null
   result: ExpeditionResult | null
   setScreen: (screen: Screen) => void
-  startRun: () => void
+  startRun: (shipId?: ShipId) => void
   moveTo: (roomId: string) => void
   chooseRoomAction: (choice: 'primary' | 'secondary') => void
   combatAction: (action: 'attack' | 'defend' | 'overload') => void
@@ -30,6 +33,13 @@ interface GameState {
 
 const DEFAULT_BANKED_SCRAP = 32
 const DEFAULT_UPGRADES: Record<UpgradeKey, number> = { hull: 0, battery: 0, scanner: 0 }
+const createDefaultShipProgress = (): Record<ShipId, ShipProgress> => ({
+  [FIRST_SHIP_ID]: {
+    visitedRoomIds: [START_ROOM_ID],
+    resolvedRoomIds: [START_ROOM_ID],
+    completed: false,
+  },
+})
 
 const adjacent = (a: Room, b: Room) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1
 
@@ -64,28 +74,31 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
   screen: 'hangar',
   bankedScrap: DEFAULT_BANKED_SCRAP,
   upgrades: { ...DEFAULT_UPGRADES },
+  shipProgress: createDefaultShipProgress(),
   run: null,
   result: null,
 
   setScreen: (screen) => set({ screen }),
 
-  startRun: () => {
-    const levels = get().upgrades
+  startRun: (shipId = FIRST_SHIP_ID) => {
+    const state = get()
+    const levels = state.upgrades
     const maxHull = 10 + levels.hull * 2
     const maxEnergy = 12 + levels.battery * 2
     set({
       screen: 'expedition',
       result: null,
       run: {
+        shipId,
         hull: maxHull,
         maxHull,
         energy: maxEnergy,
         maxEnergy,
         scrap: 0,
-        roomsExplored: 1,
+        roomsExplored: 0,
         currentRoomId: START_ROOM_ID,
         previousRoomId: null,
-        rooms: createRooms(),
+        rooms: createRooms(state.shipProgress[shipId] ?? createDefaultShipProgress()[shipId]),
         combat: null,
         notice: 'Шлюз отмечен. Канал эвакуации стабилен.',
       },
@@ -115,7 +128,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
       rooms,
       notice: roomNotice[target.kind] ?? null,
       combat:
-        firstVisit && target.kind === 'enemy'
+        target.kind === 'enemy' && !target.resolved
           ? { enemyHull: 6, enemyMaxHull: 6, enemyIntent: 'strike', round: 1 }
           : null,
     }
@@ -214,11 +227,21 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
   },
 
   extract: () => {
-    const { run, bankedScrap } = get()
+    const { run, bankedScrap, shipProgress } = get()
     if (!run || run.currentRoomId !== START_ROOM_ID || run.combat) return
+    const visitedRoomIds = run.rooms.filter((room) => room.visited).map((room) => room.id)
+    const resolvedRoomIds = run.rooms.filter((room) => room.resolved).map((room) => room.id)
     set({
       screen: 'result',
       bankedScrap: bankedScrap + run.scrap,
+      shipProgress: {
+        ...shipProgress,
+        [run.shipId]: {
+          visitedRoomIds,
+          resolvedRoomIds,
+          completed: run.rooms.every((room) => room.visited),
+        },
+      },
       result: {
         status: 'extracted',
         scrapBanked: run.scrap,
@@ -251,15 +274,24 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     screen: 'hangar',
     bankedScrap: DEFAULT_BANKED_SCRAP,
     upgrades: { ...DEFAULT_UPGRADES },
+    shipProgress: createDefaultShipProgress(),
     run: null,
     result: null,
   }),
 }), {
   name: 'cosmic-scavenger-progress',
-  version: 1,
+  version: 2,
   storage: createJSONStorage(() => localStorage),
+  migrate: (persistedState, version) => {
+    const state = persistedState as Partial<GameState>
+    return {
+      ...state,
+      shipProgress: version < 2 ? createDefaultShipProgress() : state.shipProgress ?? createDefaultShipProgress(),
+    }
+  },
   partialize: (state) => ({
     bankedScrap: state.bankedScrap,
     upgrades: state.upgrades,
+    shipProgress: state.shipProgress,
   }),
 }))
