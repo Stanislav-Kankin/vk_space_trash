@@ -42,12 +42,15 @@ interface GameState {
   moveTo: (roomId: string) => void
   chooseRoomAction: (choice: RoomAction) => void
   combatAction: (action: 'attack' | 'defend' | 'overload') => void
+  resolveEnemyTurn: () => void
+  completePuzzle: (success: boolean) => void
   extract: () => void
   purchaseUpgrade: (key: UpgradeKey) => void
   buyTool: (key: ToolKey) => void
   repairTool: (key: ToolKey) => void
   toggleLoadoutTool: (key: ToolKey) => void
   clearNotice: () => void
+  clearTrapEvent: () => void
   resetProgress: () => void
 }
 
@@ -91,7 +94,7 @@ const adjacent = (a: Room, b: Room) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
 export const SHIP_SURVEY_COMPLETE_NOTICE = 'КАРТА ОБЪЕКТА ЗАВЕРШЕНА. Вернитесь в шлюз и эвакуируйте разведданные.'
 
 export const getEnemyDamageRange = (intent: 'strike' | 'charge'): readonly [number, number] =>
-  intent === 'charge' ? [3, 4] : [2, 3]
+  intent === 'charge' ? [1, 3] : [1, 3]
 
 const rollEnemyDamage = (intent: 'strike' | 'charge') => {
   const [min, max] = getEnemyDamageRange(intent)
@@ -206,6 +209,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         equippedTools,
         emergencyUsed: false,
         combat: null,
+        trapEvent: null,
         notice: 'Шлюз отмечен. Канал эвакуации стабилен.',
       },
     })
@@ -214,7 +218,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
   moveTo: (roomId) => {
     const state = get()
     const { run } = state
-    if (!run || run.combat || run.energy <= 0) return
+    if (!run || run.combat || run.trapEvent || run.energy <= 0) return
 
     const current = run.rooms.find((room) => room.id === run.currentRoomId)
     const target = run.rooms.find((room) => room.id === roomId)
@@ -225,6 +229,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     let hull = run.hull
     let energy = run.energy - 1
     let trapNotice: string | null = null
+    let trapEvent: ExpeditionRun['trapEvent'] = null
     const trapTriggered = firstVisit && target.kind === 'trap' && target.trap
     let trapResolved = false
 
@@ -232,6 +237,17 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
       const roll = Math.floor(Math.random() * 20) + 1
       const total = roll + state.upgrades.trapSense
       trapResolved = true
+      trapEvent = {
+        id: `${target.id}:${roll}:${total}`,
+        name: target.trap.name,
+        triggered: total < target.trap.difficulty,
+        effect: target.trap.effect,
+        damage: target.trap.damage,
+        roll,
+        sense: state.upgrades.trapSense,
+        total,
+        difficulty: target.trap.difficulty,
+      }
       if (total >= target.trap.difficulty) {
         trapNotice = `Ловушка обнаружена: d20 ${roll} + чутьё ${state.upgrades.trapSense} = ${total} против ${target.trap.difficulty}. Урон предотвращён.`
       } else {
@@ -259,10 +275,18 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
       energy,
       roomsExplored: run.roomsExplored + (firstVisit ? 1 : 0),
       rooms,
+      trapEvent,
       notice: surveyCompletedNow ? SHIP_SURVEY_COMPLETE_NOTICE : trapNotice ?? roomNotice[target.kind] ?? null,
       combat:
         target.kind === 'enemy' && !target.resolved
-          ? { enemyHull: run.shipId === SECOND_SHIP_ID ? 8 : 6, enemyMaxHull: run.shipId === SECOND_SHIP_ID ? 8 : 6, enemyIntent: 'strike', round: 1 }
+          ? {
+              enemyHull: run.shipId === SECOND_SHIP_ID ? 8 : 6,
+              enemyMaxHull: run.shipId === SECOND_SHIP_ID ? 8 : 6,
+              enemyIntent: 'strike',
+              round: 1,
+              phase: 'player',
+              guard: 0,
+            }
           : null,
     }
 
@@ -341,7 +365,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
   combatAction: (action) => {
     const state = get()
     const { run } = state
-    if (!run?.combat) return
+    if (!run?.combat || run.combat.phase !== 'player') return
     if (action === 'overload' && run.energy < 2) return
 
     const damage = action === 'overload' ? 4 : action === 'attack' ? 2 : 0
@@ -363,25 +387,63 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
       return
     }
 
-    const incomingDamage = rollEnemyDamage(run.combat.enemyIntent)
     const shield = action === 'defend' ? 2 + state.upgrades.shieldAmplifier : 0
-    const enemyDamage = Math.max(0, incomingDamage - shield)
     const nextRun: ExpeditionRun = {
       ...run,
-      hull: run.hull - enemyDamage,
       energy,
       combat: {
         ...run.combat,
         enemyHull,
-        round: run.combat.round + 1,
-        enemyIntent: run.combat.enemyIntent === 'strike' ? 'charge' : 'strike',
+        phase: 'enemy',
+        guard: shield,
       },
-      notice: action === 'defend'
-        ? `Щит поглотил ${shield} урона. Корпус получил ${enemyDamage}.`
-        : `Корпус получил ${enemyDamage} урона.`,
+      notice: shield > 0 ? `Щит поднят: поглощение ${shield}. Дрон атакует.` : 'Дрон перехватил инициативу и атакует.',
     }
 
     set(getRunOutcome(nextRun, state, 'Охранный дрон пробил корпус'))
+  },
+
+  resolveEnemyTurn: () => {
+    const state = get()
+    const { run } = state
+    if (!run?.combat || run.combat.phase !== 'enemy') return
+
+    const incomingDamage = rollEnemyDamage(run.combat.enemyIntent)
+    const enemyDamage = Math.max(0, incomingDamage - run.combat.guard)
+    const nextRun: ExpeditionRun = {
+      ...run,
+      hull: run.hull - enemyDamage,
+      combat: {
+        ...run.combat,
+        round: run.combat.round + 1,
+        enemyIntent: run.combat.enemyIntent === 'strike' ? 'charge' : 'strike',
+        phase: 'player',
+        guard: 0,
+      },
+      notice: run.combat.guard > 0
+        ? `Удар ${incomingDamage}. Щит поглотил ${Math.min(incomingDamage, run.combat.guard)}. Корпус получил ${enemyDamage}.`
+        : `Импульсный удар: корпус получил ${enemyDamage} урона.`,
+    }
+
+    set(getRunOutcome(nextRun, state, 'Охранный дрон пробил корпус'))
+  },
+
+  completePuzzle: (success) => {
+    const state = get()
+    const { run } = state
+    if (!run) return
+    const room = run.rooms.find((item) => item.id === run.currentRoomId)
+    if (!room || room.kind !== 'puzzle' || room.resolved) return
+    const reward = success ? 15 + state.upgrades.salvageBonus : 0
+    const nextRun: ExpeditionRun = {
+      ...run,
+      scrap: run.scrap + reward,
+      rooms: run.rooms.map((item) => item.id === room.id ? { ...item, resolved: true } : item),
+      notice: success
+        ? `Сортировочная кассета открыта: +${reward} лома.`
+        : 'Матрица заблокирована. Кассета осталась закрыта.',
+    }
+    set(getRunOutcome(nextRun, state, 'Корпус не выдержал повреждений'))
   },
 
   extract: () => {
@@ -470,6 +532,11 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
   clearNotice: () => {
     const run = get().run
     if (run) set({ run: { ...run, notice: null } })
+  },
+
+  clearTrapEvent: () => {
+    const run = get().run
+    if (run) set({ run: { ...run, trapEvent: null } })
   },
 
   resetProgress: () => set({

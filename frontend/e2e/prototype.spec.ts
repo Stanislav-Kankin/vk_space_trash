@@ -12,12 +12,46 @@ test.beforeAll(async () => {
   await mkdir('test-results/visual', { recursive: true })
 })
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('cosmic-scavenger-onboarding-v1', 'true')
+  })
+})
+
 const launchExpedition = async (page: Page) => {
   await page.getByRole('button', { name: /Начать вылазку/i }).click()
   await expect(page.getByRole('heading', { name: 'Карта сектора' })).toBeVisible()
   await page.getByRole('button', { name: 'Стыковаться' }).click()
   await expect(page.getByRole('heading', { name: 'Стыковочный шлюз' })).toBeVisible()
 }
+
+test('first launch briefing explains the expedition and can be reopened', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('/?tutorial=1')
+
+  const briefing = page.getByRole('dialog', { name: /Соберите лом и вернитесь/i })
+  await expect(briefing).toBeVisible()
+  await expect(page.getByText('ИНСТРУКТАЖ · 1/5')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  await page.screenshot({ path: 'test-results/visual/onboarding-320x568.png' })
+
+  await page.getByRole('button', { name: 'Дальше' }).click()
+  await expect(page.getByRole('heading', { name: 'Каждый переход стоит энергии' })).toBeVisible()
+  await page.getByRole('button', { name: 'Дальше' }).click()
+  await expect(page.getByRole('heading', { name: 'Инструмент решает, что можно забрать' })).toBeVisible()
+  await page.getByRole('button', { name: 'Дальше' }).click()
+  await expect(page.getByRole('heading', { name: 'Дрон отвечает после вашего хода' })).toBeVisible()
+  await page.getByRole('button', { name: 'Дальше' }).click()
+  await expect(page.getByRole('heading', { name: 'Сохранение проходит только через шлюз' })).toBeVisible()
+  await page.getByRole('button', { name: 'В ангар' }).click()
+  await expect(page.getByRole('button', { name: /Начать вылазку/i })).toBeVisible()
+
+  await page.goto('/')
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await page.getByRole('button', { name: 'Настройки' }).click()
+  await page.getByRole('button', { name: 'Повторить инструктаж' }).click()
+  await expect(page.getByRole('heading', { name: 'Соберите лом и вернитесь' })).toBeVisible()
+})
 
 for (const viewport of viewports) {
   test(`hangar fits ${viewport.width}x${viewport.height}`, async ({ page }) => {
@@ -69,6 +103,27 @@ test('sector map pans horizontally and keeps the first ship selectable', async (
   await page.getByRole('button', { name: 'Сдвинуть карту вправо' }).click()
   await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
   await page.screenshot({ path: 'test-results/visual/star-map-mobile.png' })
+})
+
+test('sorting matrix opens as a 7 by 7 five-move puzzle on the first ship', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('/')
+  await launchExpedition(page)
+  await page.locator('[data-destination-id="4:3"]').click()
+  await page.locator('[data-destination-id="3:3"]').click()
+  await page.locator('[data-destination-id="3:4"]').click()
+  await page.getByRole('button', { name: 'Запустить сортировочную матрицу' }).click()
+
+  const matrix = page.getByRole('grid', { name: 'Сортировочная матрица семь на семь' })
+  await expect(matrix.getByRole('gridcell')).toHaveCount(49)
+  await expect(page.getByText('0/15', { exact: true })).toBeVisible()
+  await expect(page.getByText('5', { exact: true })).toBeVisible()
+  await page.waitForTimeout(350)
+  const tile = await matrix.getByRole('gridcell').first().boundingBox()
+  expect(tile?.width).toBeGreaterThanOrEqual(44)
+  expect(tile?.height).toBeGreaterThanOrEqual(44)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  await page.screenshot({ path: 'test-results/visual/match-three-320x568.png' })
 })
 
 test('evacuated survey progress is restored on the same ship', async ({ page }) => {
@@ -199,6 +254,9 @@ test('equips two tools and opens the 6 by 6 Hephaestus deck', async ({ page }) =
   await expect(page.getByText(/Инструмент механика: −1 прочности/)).toBeVisible()
   await page.locator('[data-destination-id="5:5"]').click()
   await expect(page.getByText(/d20 \d+ \+ чутьё 0 = \d+ против 22/)).toBeVisible()
+  const trapSequence = page.locator('.trap-sequence')
+  await expect(trapSequence).toBeVisible()
+  expect(await page.locator('.trap-timer i').evaluate((element) => getComputedStyle(element).animationDuration)).toBe('5s')
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/hephaestus-trap.png' })
 })
@@ -341,15 +399,19 @@ test('completes a risky expedition and extracts at the starting airlock', async 
   await page.locator('[data-destination-id="1:1"]').click()
   await expect(page.getByText('Охранный дрон', { exact: true })).toBeVisible()
   await expect(page.getByAltText('Охранный дрон в контрольном коридоре')).toBeVisible()
-  await expect(page.getByText('Импульсный удар · 2–3')).toBeVisible()
+  await expect(page.getByText('Импульсный удар · 1–3')).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/combat.png' })
 
-  await page.getByRole('button', { name: /Атака/i }).click()
-  await expect(page.getByText(/Корпус получил [23] урона/)).toBeVisible()
-  await expect(page.getByText('Импульсный удар · 3–4')).toBeVisible()
-  await page.getByRole('button', { name: /Атака/i }).click()
-  await page.getByRole('button', { name: /Атака/i }).click()
+  const attack = page.getByRole('button', { name: /Атака/i })
+  await attack.click()
+  await expect(page.getByText('ХОД ПРОТИВНИКА')).toBeVisible()
+  await expect(attack).toBeDisabled()
+  await expect(page.getByText(/корпус получил [123] урона/i)).toBeVisible({ timeout: 2500 })
+  await expect(attack).toBeEnabled()
+  await attack.click()
+  await expect(attack).toBeEnabled({ timeout: 2500 })
+  await attack.click()
   await expect(page.getByText(/Дрон обезврежен/i)).toBeVisible()
 
   await page.locator('[data-destination-id="2:1"]').click()

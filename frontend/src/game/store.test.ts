@@ -159,7 +159,7 @@ describe('mock expedition state', () => {
     })
   })
 
-  it('rolls drone damage by intent and lets defense absorb two damage', () => {
+  it('animates a separate enemy turn with 1-3 damage and lets defense absorb it', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.999)
     useGameStore.getState().startRun()
     const run = useGameStore.getState().run!
@@ -167,21 +167,50 @@ describe('mock expedition state', () => {
       run: {
         ...run,
         currentRoomId: '1:1',
-        combat: { enemyHull: 6, enemyMaxHull: 6, enemyIntent: 'charge', round: 2 },
+        combat: { enemyHull: 6, enemyMaxHull: 6, enemyIntent: 'charge', round: 2, phase: 'player', guard: 0 },
       },
     })
 
     useGameStore.getState().combatAction('defend')
     expect(useGameStore.getState().run).toMatchObject({
-      hull: 8,
-      combat: { enemyHull: 6, enemyIntent: 'strike', round: 3 },
+      hull: 10,
+      combat: { enemyHull: 6, enemyIntent: 'charge', round: 2, phase: 'enemy', guard: 2 },
+    })
+    useGameStore.getState().resolveEnemyTurn()
+    expect(useGameStore.getState().run).toMatchObject({
+      hull: 9,
+      combat: { enemyHull: 6, enemyIntent: 'strike', round: 3, phase: 'player', guard: 0 },
     })
 
     useGameStore.getState().combatAction('attack')
     expect(useGameStore.getState().run).toMatchObject({
-      hull: 5,
-      combat: { enemyHull: 4, enemyIntent: 'charge', round: 4 },
+      hull: 9,
+      combat: { enemyHull: 4, enemyIntent: 'strike', round: 3, phase: 'enemy' },
     })
+    useGameStore.getState().resolveEnemyTurn()
+    expect(useGameStore.getState().run).toMatchObject({
+      hull: 6,
+      combat: { enemyHull: 4, enemyIntent: 'charge', round: 4, phase: 'player' },
+    })
+  })
+
+  it('awards puzzle scrap once and resolves the sorting room', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '3:4',
+        rooms: run.rooms.map((room) => room.id === '3:4' ? { ...room, visited: true, resolved: false } : room),
+      },
+    })
+
+    useGameStore.getState().completePuzzle(true)
+    expect(useGameStore.getState().run?.scrap).toBe(15)
+    expect(useGameStore.getState().run?.rooms.find((room) => room.id === '3:4')?.resolved).toBe(true)
+
+    useGameStore.getState().completePuzzle(true)
+    expect(useGameStore.getState().run?.scrap).toBe(15)
   })
 
   it('refuses extraction away from the starting room', () => {

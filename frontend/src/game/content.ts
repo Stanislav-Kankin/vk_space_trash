@@ -58,7 +58,15 @@ const transportBlueprint: RoomBlueprint[] = [
   { id: '3:1', x: 1, y: 3, kind: 'empty' },
   { id: '3:2', x: 2, y: 3, kind: 'hazard' },
   { id: '3:3', x: 3, y: 3, kind: 'storage' },
-  { id: '3:4', x: 4, y: 3, kind: 'empty' },
+  {
+    id: '3:4',
+    x: 4,
+    y: 3,
+    kind: 'puzzle',
+    title: 'Сортировочная матрица',
+    eyebrow: 'СИСТЕМА: РУЧНОЙ КОНТУР',
+    description: 'Аварийный пульт удерживает кассету с ценными компонентами. Матрицу можно собрать вручную.',
+  },
   { id: '4:1', x: 1, y: 4, kind: 'storage' },
   { id: START_ROOM_ID, x: 2, y: 4, kind: 'start' },
   { id: '4:3', x: 3, y: 4, kind: 'empty' },
@@ -172,6 +180,7 @@ export const roomCopy = {
   door: { eyebrow: 'Маршрут: заблокирован', title: 'Заклинившие ворота', body: 'Привод перекошен. Назад пройти можно, но путь вглубь закрыт.' },
   hazard: { eyebrow: 'Опасность: разгерметизация', title: 'Рваная переборка', body: 'За пробоиной виден сервисный ящик. Можно рискнуть корпусом.' },
   repair: { eyebrow: 'Система: доступна', title: 'Ремонтный модуль', body: 'Старая станция ещё держит давление и принимает лом.' },
+  puzzle: { eyebrow: 'Система: ручной контур', title: 'Сортировочная матрица', body: 'Соберите красные кнопки в линии по три, чтобы разблокировать кассету с ломом.' },
 } as const
 
 export const getToolDefinition = (key: ToolKey) => toolDefinitions.find((tool) => tool.key === key)!

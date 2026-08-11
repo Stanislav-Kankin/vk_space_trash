@@ -29,6 +29,7 @@ export type RoomKind =
   | 'vacuum'
   | 'trap'
   | 'door'
+  | 'puzzle'
 
 export type RoomState = 'hidden' | 'available' | 'visited'
 
@@ -57,6 +58,20 @@ export interface CombatState {
   enemyMaxHull: number
   enemyIntent: 'strike' | 'charge'
   round: number
+  phase: 'player' | 'enemy'
+  guard: number
+}
+
+export interface TrapEvent {
+  id: string
+  name: string
+  triggered: boolean
+  effect: 'hull' | 'energy'
+  damage: number
+  roll: number
+  sense: number
+  total: number
+  difficulty: number
 }
 
 export interface ExpeditionRun {
@@ -73,6 +88,7 @@ export interface ExpeditionRun {
   equippedTools: ToolKey[]
   emergencyUsed: boolean
   combat: CombatState | null
+  trapEvent: TrapEvent | null
   notice: string | null
 }
 
