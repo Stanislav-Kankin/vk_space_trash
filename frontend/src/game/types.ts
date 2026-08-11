@@ -72,6 +72,27 @@ export interface TrapEvent {
   sense: number
   total: number
   difficulty: number
+  bypassedByCode?: boolean
+}
+
+export type RandomEventKind =
+  | 'digital-lock'
+  | 'crew-tablet'
+  | 'radiation'
+  | 'power-grid'
+  | 'cargo-crane'
+  | 'star-chart'
+
+export interface RandomEncounter {
+  id: string
+  kind: RandomEventKind
+  seed: number
+}
+
+export interface RandomEventResolution {
+  status: 'success' | 'partial' | 'failure' | 'skip'
+  choice?: 'scrap' | 'energy' | 'intel' | 'code'
+  score?: number
 }
 
 export interface ExpeditionRun {
@@ -87,8 +108,11 @@ export interface ExpeditionRun {
   rooms: Room[]
   equippedTools: ToolKey[]
   emergencyUsed: boolean
+  intelRoomIds: string[]
+  trapBypassCharges: number
   combat: CombatState | null
   trapEvent: TrapEvent | null
+  randomEncounter: RandomEncounter | null
   notice: string | null
 }
 

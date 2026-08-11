@@ -11,12 +11,26 @@ import {
   ships,
   upgrades,
 } from './content'
+import {
+  createRandomEncounter,
+  drawRandomEvent,
+  getCargoReward,
+  getDigitalLockConfig,
+  getPowerGridReward,
+  getRadiationConfig,
+  getStarChartConfig,
+  getTabletScenario,
+  randomEventDistance,
+  randomEventKinds,
+} from './randomEvents'
 import type {
   ExpeditionResult,
   ExpeditionRun,
   Room,
   RoomKind,
   RoomState,
+  RandomEventKind,
+  RandomEventResolution,
   Screen,
   ShipId,
   ShipProgress,
@@ -34,6 +48,9 @@ interface GameState {
   tools: Record<ToolKey, ToolState>
   loadout: ToolKey[]
   claimedCompletionRewards: ShipId[]
+  totalMoves: number
+  movesUntilRandomEvent: number
+  randomEventBag: RandomEventKind[]
   shipProgress: Record<ShipId, ShipProgress>
   run: ExpeditionRun | null
   result: ExpeditionResult | null
@@ -44,6 +61,7 @@ interface GameState {
   combatAction: (action: 'attack' | 'defend' | 'overload') => void
   resolveEnemyTurn: () => void
   completePuzzle: (success: boolean) => void
+  resolveRandomEvent: (resolution: RandomEventResolution) => void
   extract: () => void
   purchaseUpgrade: (key: UpgradeKey) => void
   buyTool: (key: ToolKey) => void
@@ -179,6 +197,9 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
   tools: createDefaultTools(),
   loadout: ['mechanic'],
   claimedCompletionRewards: [],
+  totalMoves: 0,
+  movesUntilRandomEvent: randomEventDistance(),
+  randomEventBag: [...randomEventKinds],
   shipProgress: createDefaultShipProgress(),
   run: null,
   result: null,
@@ -208,8 +229,11 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         rooms: createRooms(shipId, state.shipProgress[shipId]),
         equippedTools,
         emergencyUsed: false,
+        intelRoomIds: [],
+        trapBypassCharges: 0,
         combat: null,
         trapEvent: null,
+        randomEncounter: null,
         notice: 'Шлюз отмечен. Канал эвакуации стабилен.',
       },
     })
@@ -218,7 +242,7 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
   moveTo: (roomId) => {
     const state = get()
     const { run } = state
-    if (!run || run.combat || run.trapEvent || run.energy <= 0) return
+    if (!run || run.combat || run.trapEvent || run.randomEncounter || run.energy <= 0) return
 
     const current = run.rooms.find((room) => room.id === run.currentRoomId)
     const target = run.rooms.find((room) => room.id === roomId)
@@ -232,11 +256,14 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     let trapEvent: ExpeditionRun['trapEvent'] = null
     const trapTriggered = firstVisit && target.kind === 'trap' && target.trap
     let trapResolved = false
+    let trapBypassCharges = run.trapBypassCharges
 
     if (trapTriggered && target.trap) {
-      const roll = Math.floor(Math.random() * 20) + 1
-      const total = roll + state.upgrades.trapSense
+      const bypassedByCode = trapBypassCharges > 0
+      const roll = bypassedByCode ? 20 : Math.floor(Math.random() * 20) + 1
+      const total = bypassedByCode ? target.trap.difficulty : roll + state.upgrades.trapSense
       trapResolved = true
+      if (bypassedByCode) trapBypassCharges -= 1
       trapEvent = {
         id: `${target.id}:${roll}:${total}`,
         name: target.trap.name,
@@ -247,8 +274,11 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         sense: state.upgrades.trapSense,
         total,
         difficulty: target.trap.difficulty,
+        bypassedByCode,
       }
-      if (total >= target.trap.difficulty) {
+      if (bypassedByCode) {
+        trapNotice = 'Служебный код принят. Ловушка переведена в безопасный режим.'
+      } else if (total >= target.trap.difficulty) {
         trapNotice = `Ловушка обнаружена: d20 ${roll} + чутьё ${state.upgrades.trapSense} = ${total} против ${target.trap.difficulty}. Урон предотвращён.`
       } else {
         if (target.trap.effect === 'hull') hull -= target.trap.damage
@@ -267,6 +297,24 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         : room,
     )
     const surveyCompletedNow = firstVisit && rooms.every((room) => room.visited)
+    const totalMoves = state.totalMoves + 1
+    let movesUntilRandomEvent = Math.max(0, state.movesUntilRandomEvent - 1)
+    let randomEventBag = state.randomEventBag
+    let randomEncounter: ExpeditionRun['randomEncounter'] = null
+    const eventEligible = !trapEvent
+      && target.kind !== 'start'
+      && target.kind !== 'enemy'
+      && target.kind !== 'trap'
+      && target.kind !== 'door'
+      && target.kind !== 'puzzle'
+      && hull > 0
+      && energy > 0
+    if (movesUntilRandomEvent === 0 && eventEligible) {
+      const draw = drawRandomEvent(randomEventBag)
+      randomEncounter = createRandomEncounter(draw.kind, totalMoves)
+      randomEventBag = draw.bag
+      movesUntilRandomEvent = randomEventDistance()
+    }
     const nextRun: ExpeditionRun = {
       ...run,
       currentRoomId: roomId,
@@ -275,7 +323,9 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
       energy,
       roomsExplored: run.roomsExplored + (firstVisit ? 1 : 0),
       rooms,
+      trapBypassCharges,
       trapEvent,
+      randomEncounter,
       notice: surveyCompletedNow ? SHIP_SURVEY_COMPLETE_NOTICE : trapNotice ?? roomNotice[target.kind] ?? null,
       combat:
         target.kind === 'enemy' && !target.resolved
@@ -290,7 +340,12 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
           : null,
     }
 
-    set(getRunOutcome(nextRun, state, 'Корпус не выдержал повреждений'))
+    set({
+      totalMoves,
+      movesUntilRandomEvent,
+      randomEventBag,
+      ...getRunOutcome(nextRun, state, 'Корпус не выдержал повреждений'),
+    })
   },
 
   chooseRoomAction: (choice) => {
@@ -446,6 +501,92 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     set(getRunOutcome(nextRun, state, 'Корпус не выдержал повреждений'))
   },
 
+  resolveRandomEvent: (resolution) => {
+    const state = get()
+    const { run } = state
+    const encounter = run?.randomEncounter
+    if (!run || !encounter) return
+
+    let nextRun: ExpeditionRun = { ...run, randomEncounter: null }
+    if (resolution.status === 'skip') {
+      nextRun.notice = 'Сигнал оставлен без внимания.'
+      set({ run: nextRun })
+      return
+    }
+
+    if (encounter.kind === 'digital-lock') {
+      const config = getDigitalLockConfig(encounter.seed)
+      nextRun = resolution.status === 'success'
+        ? { ...nextRun, scrap: run.scrap + config.reward, notice: `Цифровой замок открыт: +${config.reward} лома.` }
+        : { ...nextRun, notice: 'Защита заблокировала модуль. Добычи нет.' }
+    }
+
+    if (encounter.kind === 'crew-tablet') {
+      const scenario = getTabletScenario(encounter.seed)
+      if (resolution.status !== 'success') {
+        nextRun.notice = 'Батарея планшета разрядилась. Тайник не найден.'
+      } else if (resolution.choice === 'intel') {
+        const intel = run.rooms
+          .filter((room) => !room.visited && !run.intelRoomIds.includes(room.id))
+          .sort((first, second) => {
+            const current = run.rooms.find((room) => room.id === run.currentRoomId)!
+            return (Math.abs(first.x - current.x) + Math.abs(first.y - current.y))
+              - (Math.abs(second.x - current.x) + Math.abs(second.y - current.y))
+          })
+          .slice(0, 3)
+          .map((room) => room.id)
+        nextRun = { ...nextRun, intelRoomIds: [...run.intelRoomIds, ...intel], notice: `Служебная карта раскрыла ${intel.length} отсека.` }
+      } else if (resolution.choice === 'code') {
+        nextRun = { ...nextRun, trapBypassCharges: run.trapBypassCharges + 1, notice: 'Загружен код обхода одной ловушки.' }
+      } else {
+        nextRun = { ...nextRun, scrap: run.scrap + scenario.scrapReward, notice: `Личный тайник найден: +${scenario.scrapReward} лома.` }
+      }
+    }
+
+    if (encounter.kind === 'radiation') {
+      const score = resolution.score ?? 0
+      const config = getRadiationConfig(encounter.seed)
+      if (score >= 3) nextRun = { ...nextRun, scrap: run.scrap + config.reward, notice: `Защита настроена: +${config.reward} лома.` }
+      else if (score === 2) nextRun.notice = 'Защита выдержала. Контейнер остался недоступен.'
+      else nextRun = { ...nextRun, hull: run.hull - 2, notice: 'Радиационный импульс: −2 корпуса.' }
+    }
+
+    if (encounter.kind === 'power-grid') {
+      if (resolution.status !== 'success') {
+        nextRun = { ...nextRun, energy: Math.max(0, run.energy - 1), notice: 'Короткое замыкание: −1 энергия.' }
+      } else if (resolution.choice === 'energy') {
+        const restored = Math.min(3, run.maxEnergy - run.energy)
+        nextRun = { ...nextRun, energy: run.energy + restored, notice: `Аккумулятор подключён: +${restored} энергии.` }
+      } else {
+        const reward = getPowerGridReward(encounter.seed)
+        nextRun = { ...nextRun, scrap: run.scrap + reward, notice: `Аккумулятор разобран: +${reward} лома.` }
+      }
+    }
+
+    if (encounter.kind === 'cargo-crane') {
+      const score = resolution.score ?? 0
+      const reward = getCargoReward(encounter.seed, score)
+      nextRun = reward > 0
+        ? { ...nextRun, scrap: run.scrap + reward, notice: `Груз захвачен: +${reward} лома.` }
+        : { ...nextRun, notice: 'Контейнеры ушли в шахту. Добычи нет.' }
+    }
+
+    if (encounter.kind === 'star-chart') {
+      if (resolution.status !== 'success') {
+        nextRun.notice = 'Навигационный сигнал потерян.'
+      } else {
+        const revealCount = getStarChartConfig(encounter.seed).revealedRooms
+        const intel = run.rooms
+          .filter((room) => !room.visited && !run.intelRoomIds.includes(room.id))
+          .slice(0, revealCount)
+          .map((room) => room.id)
+        nextRun = { ...nextRun, intelRoomIds: [...run.intelRoomIds, ...intel], notice: `Звёздная карта раскрыла ${intel.length} отсека.` }
+      }
+    }
+
+    set(getRunOutcome(nextRun, state, 'Корпус не выдержал повреждений'))
+  },
+
   extract: () => {
     const state = get()
     const { run } = state
@@ -546,13 +687,16 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     tools: createDefaultTools(),
     loadout: ['mechanic'],
     claimedCompletionRewards: [],
+    totalMoves: 0,
+    movesUntilRandomEvent: randomEventDistance(),
+    randomEventBag: [...randomEventKinds],
     shipProgress: createDefaultShipProgress(),
     run: null,
     result: null,
   }),
 }), {
   name: 'cosmic-scavenger-progress',
-  version: 3,
+  version: 4,
   storage: createJSONStorage(() => localStorage),
   migrate: (persistedState, version) => {
     const state = persistedState as Partial<GameState>
@@ -580,6 +724,9 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
         ? [...claimedCompletionRewards, FIRST_SHIP_ID]
         : claimedCompletionRewards,
       shipProgress,
+      totalMoves: state.totalMoves ?? 0,
+      movesUntilRandomEvent: state.movesUntilRandomEvent ?? randomEventDistance(),
+      randomEventBag: state.randomEventBag ?? [...randomEventKinds],
     }
   },
   partialize: (state) => ({
@@ -589,5 +736,8 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
     loadout: state.loadout,
     claimedCompletionRewards: state.claimedCompletionRewards,
     shipProgress: state.shipProgress,
+    totalMoves: state.totalMoves,
+    movesUntilRandomEvent: state.movesUntilRandomEvent,
+    randomEventBag: state.randomEventBag,
   }),
 }))

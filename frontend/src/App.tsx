@@ -49,16 +49,9 @@ import {
   upgrades,
 } from './game/content'
 import { getEnemyDamageRange, SHIP_SURVEY_COMPLETE_NOTICE, getRoomState, useGameStore } from './game/store'
-import {
-  MATCH_MOVE_LIMIT,
-  MATCH_RED_TARGET,
-  createMatchBoard,
-  resolveMatchMove,
-  type MatchPoint,
-  type MatchTile,
-} from './game/matchThree'
 import type { ExpeditionRun, Room, RoomKind, ShipId, ToolKey, UpgradeCategory, UpgradeKey } from './game/types'
 import { setVKSwipeBack, VK_VISIBILITY_EVENT } from './vkRuntime'
+import { FixedMatchThreeEvent, RandomEncounterOverlay } from './RandomEncounter'
 import './App.css'
 
 const BUILD_VERSION = import.meta.env.VITE_BUILD_VERSION || 'local'
@@ -553,6 +546,8 @@ function ShipMap({ run, locked, onMove }: { run: ExpeditionRun; locked: boolean;
           const room = roomLookup.get(`${y}:${x}`)
           if (!room) return <span className="map-void" key={`${y}:${x}`} aria-hidden="true" />
           const state = getRoomState(room, current)
+          const intel = run.intelRoomIds.includes(room.id)
+          const displayState = intel && state === 'hidden' ? 'scanned' : state
           const isCurrent = room.id === run.currentRoomId
           const isAdjacent = Math.abs(room.x - current.x) + Math.abs(room.y - current.y) === 1
           const canMove = isAdjacent
@@ -560,13 +555,13 @@ function ShipMap({ run, locked, onMove }: { run: ExpeditionRun; locked: boolean;
             && !locked
             && run.energy > 0
             && (!doorBlocksForward || room.id === run.previousRoomId)
-          const reveal = state === 'visited' || (state === 'available' && scannerLevel > 0) || room.kind === 'start'
+          const reveal = state === 'visited' || intel || (state === 'available' && scannerLevel > 0) || room.kind === 'start'
           return (
             <button
               type="button"
               role="gridcell"
               key={room.id}
-              className={`map-room ${state} ${isCurrent ? 'current' : ''} kind-${room.kind}`}
+              className={`map-room ${displayState} ${isCurrent ? 'current' : ''} kind-${room.kind}`}
               data-room-id={room.id}
               disabled={!canMove}
               onClick={() => onMove(room.id)}
@@ -668,7 +663,7 @@ function RoomNavigation({ run, locked, onTravel }: { run: ExpeditionRun; locked:
       <div className={`exit-grid exits-${exits.length}`}>
         {exits.map((room) => {
           const direction = directionMeta(current, room)
-          const known = room.visited || room.kind === 'start' || scannerLevel > 0
+          const known = room.visited || run.intelRoomIds.includes(room.id) || room.kind === 'start' || scannerLevel > 0
           const isReturn = room.id === run.previousRoomId
           const blockedByDoor = doorBlocksForward && !isReturn
           return (
@@ -718,7 +713,7 @@ function RoomEvent({ room, run, onClose }: { room: Room; run: ExpeditionRun; onC
   const tools = useGameStore((state) => state.tools)
   const loadout = run.equippedTools
   const salvage = salvageDefinitions[room.kind]
-  if (room.kind === 'puzzle') return <MatchThreeEvent onClose={onClose} />
+  if (room.kind === 'puzzle') return <FixedMatchThreeEvent onClose={onClose} />
   if (!salvage && room.kind !== 'hazard' && room.kind !== 'repair') return null
   const copy = roomCopy[room.kind as keyof typeof roomCopy]
   const primaryTool = salvage ? getToolDefinition(salvage.primaryTool) : null
@@ -767,185 +762,6 @@ function RoomEvent({ room, run, onClose }: { room: Room; run: ExpeditionRun; onC
           }}>{room.kind === 'hazard' ? 'Обойти переборку' : 'Оставить как есть'}</button>
         </div>
       </motion.section>
-    </motion.div>
-  )
-}
-
-const matchTileLabels: Record<MatchTile, string> = {
-  button: 'Красная кнопка',
-  chip: 'Зелёная микросхема',
-  gear: 'Голубая шестерёнка',
-  rock: 'Чёрный камень',
-}
-
-function MatchThreeEvent({ onClose }: { onClose: () => void }) {
-  const completePuzzle = useGameStore((state) => state.completePuzzle)
-  const [board, setBoard] = useState(() => createMatchBoard())
-  const [selected, setSelected] = useState<MatchPoint | null>(null)
-  const [movesLeft, setMovesLeft] = useState(MATCH_MOVE_LIMIT)
-  const [redCollected, setRedCollected] = useState(0)
-  const [message, setMessage] = useState('Поменяйте местами соседние элементы.')
-  const [boardVersion, setBoardVersion] = useState(0)
-  const [finished, setFinished] = useState(false)
-  const [animating, setAnimating] = useState(false)
-  const [clearingTiles, setClearingTiles] = useState<Set<string>>(() => new Set())
-  const [tileMotion, setTileMotion] = useState<{ x: number; y: number; fresh: boolean }[][] | null>(null)
-  const animationTimers = useRef<number[]>([])
-
-  useEffect(() => () => {
-    animationTimers.current.forEach((timer) => window.clearTimeout(timer))
-  }, [])
-
-  const wait = (duration: number) => new Promise<void>((resolve) => {
-    const timer = window.setTimeout(resolve, duration)
-    animationTimers.current.push(timer)
-  })
-
-  const finish = (success: boolean) => {
-    setFinished(true)
-    setMessage(success ? 'Кассета разблокирована. +15 лома.' : 'Ходы закончились. Матрица заблокирована.')
-    const timer = window.setTimeout(() => {
-      completePuzzle(success)
-      onClose()
-    }, 1100)
-    animationTimers.current.push(timer)
-  }
-
-  const selectTile = async (point: MatchPoint) => {
-    if (finished || animating) return
-    if (!selected) {
-      setSelected(point)
-      return
-    }
-    if (selected.row === point.row && selected.column === point.column) {
-      setSelected(null)
-      return
-    }
-
-    const first = selected
-    const result = resolveMatchMove(board, first, point)
-    if (!result.valid) {
-      setSelected(point)
-      setMessage('Здесь нет линии из трёх. Выберите другой элемент.')
-      gameAudio.play('ui')
-      return
-    }
-
-    const nextMoves = movesLeft - 1
-    const nextRed = redCollected + result.redCleared
-    const emptyMotion = () => board.map((row) => row.map(() => ({ x: 0, y: 0, fresh: false })))
-    const swapMotion = emptyMotion()
-    swapMotion[first.row][first.column] = {
-      x: (point.column - first.column) * 44,
-      y: (point.row - first.row) * 44,
-      fresh: false,
-    }
-    swapMotion[point.row][point.column] = {
-      x: (first.column - point.column) * 44,
-      y: (first.row - point.row) * 44,
-      fresh: false,
-    }
-
-    setAnimating(true)
-    setMovesLeft(nextMoves)
-    setSelected(null)
-    setBoard(result.cascades[0].board)
-    setTileMotion(swapMotion)
-    setBoardVersion((version) => version + 1)
-    setMessage('Контур перестраивает матрицу...')
-    gameAudio.play('inspect')
-
-    await wait(210)
-    setTileMotion(null)
-
-    let cascadeRed = 0
-    for (let index = 0; index < result.cascades.length; index += 1) {
-      const cascade = result.cascades[index]
-      const matched = new Set(cascade.matches.map(({ row, column }) => `${row}:${column}`))
-      const redInCascade = cascade.matches.filter(({ row, column }) => cascade.board[row][column] === 'button').length
-      cascadeRed += redInCascade
-      setBoard(cascade.board)
-      setClearingTiles(matched)
-      setMessage(index === 0 ? 'Совпадение зафиксировано.' : `Каскад ${index + 1}: новые совпадения.`)
-      gameAudio.play('inspect')
-      await wait(420)
-
-      setClearingTiles(new Set())
-      setBoard(cascade.collapsedBoard)
-      setTileMotion(cascade.fallOffsets.map((row, rowIndex) => row.map((offset, columnIndex) => ({
-        x: 0,
-        y: offset * 44,
-        fresh: cascade.newTiles[rowIndex][columnIndex],
-      }))))
-      setBoardVersion((version) => version + 1)
-      setRedCollected(redCollected + cascadeRed)
-      await wait(390)
-      setTileMotion(null)
-    }
-
-    if (result.reshuffled) {
-      setBoard(result.board)
-      setTileMotion(result.board.map((row) => row.map(() => ({ x: 0, y: -308, fresh: true }))))
-      setBoardVersion((version) => version + 1)
-      setMessage('Нет доступных красных линий. Матрица перемешана.')
-      await wait(420)
-      setTileMotion(null)
-    } else {
-      setBoard(result.board)
-    }
-
-    setRedCollected(nextRed)
-    setAnimating(false)
-    setMessage(result.redCleared > 0 ? `Красных элементов: +${result.redCleared}` : `Собрано элементов: ${result.cleared}`)
-
-    if (nextRed >= MATCH_RED_TARGET) finish(true)
-    else if (nextMoves === 0) finish(false)
-  }
-
-  return (
-    <motion.div className="match-three-screen" role="dialog" aria-modal="true" aria-labelledby="match-three-title" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <header className="match-three-header">
-        <div><span>АВАРИЙНАЯ СОРТИРОВКА</span><h2 id="match-three-title">Соберите красные кнопки</h2></div>
-        <IconButton label="Закрыть матрицу" onClick={onClose}><Icon24CancelOutline /></IconButton>
-      </header>
-      <div className="match-three-mission">
-        <div><span>ЦЕЛЬ</span><strong>{Math.min(redCollected, MATCH_RED_TARGET)}/{MATCH_RED_TARGET}</strong><small>красных</small></div>
-        <div><span>ХОДЫ</span><strong>{movesLeft}</strong><small>осталось</small></div>
-        <div className="match-three-colors" aria-label="Типы элементов">
-          {(Object.keys(matchTileLabels) as MatchTile[]).map((tile) => <i className={`match-mini match-${tile}`} key={tile} title={matchTileLabels[tile]} />)}
-        </div>
-      </div>
-      <div className={`match-board ${animating ? 'animating' : ''}`} role="grid" aria-label="Сортировочная матрица семь на семь">
-        {board.flatMap((row, rowIndex) => row.map((tile, columnIndex) => {
-          const active = selected?.row === rowIndex && selected.column === columnIndex
-          const clearing = clearingTiles.has(`${rowIndex}:${columnIndex}`)
-          const motionState = tileMotion?.[rowIndex][columnIndex]
-          return (
-            <motion.button
-              key={`${boardVersion}:${rowIndex}:${columnIndex}:${tile}`}
-              className={`match-tile match-${tile} ${active ? 'selected' : ''} ${clearing ? 'clearing' : ''}`}
-              type="button"
-              role="gridcell"
-              data-row={rowIndex}
-              data-column={columnIndex}
-              data-tile={tile}
-              aria-label={`${matchTileLabels[tile]}, ряд ${rowIndex + 1}, колонка ${columnIndex + 1}`}
-              aria-selected={active}
-              disabled={finished || animating}
-              onClick={() => { void selectTile({ row: rowIndex, column: columnIndex }) }}
-              initial={{
-                x: motionState?.x ?? 0,
-                y: motionState?.y ?? 0,
-                opacity: motionState?.fresh ? 0.2 : 1,
-              }}
-              animate={{ x: 0, y: 0, opacity: 1 }}
-              transition={{ duration: motionState ? 0.34 : 0.12, ease: [0.22, 0.75, 0.25, 1] }}
-            ><span /></motion.button>
-          )
-        }))}
-      </div>
-      <div className={`match-three-feedback ${finished ? 'finished' : ''}`} aria-live="polite">{message}</div>
-      <p className="match-three-rule">Совпадение засчитывается по горизонтали или вертикали. Неудачная перестановка не тратит ход.</p>
     </motion.div>
   )
 }
@@ -1012,8 +828,8 @@ function TrapSequence({ run }: { run: ExpeditionRun }) {
         <Icon20WarningTriangleOutline />
         <p>{trap.triggered ? 'КОНТУР СРАБОТАЛ' : 'КОНТУР ОБНАРУЖЕН'}</p>
         <h2>{trap.name}</h2>
-        <strong>d20 {trap.roll} + чутьё {trap.sense} = {trap.total} против {trap.difficulty}</strong>
-        <span>{trap.triggered ? `Потеряно ${trap.damage} ${trap.effect === 'hull' ? 'корпуса' : 'энергии'}` : 'Механизм остановлен до захвата'}</span>
+        <strong>{trap.bypassedByCode ? 'СЛУЖЕБНЫЙ КОД ПРИНЯТ' : `d20 ${trap.roll} + чутьё ${trap.sense} = ${trap.total} против ${trap.difficulty}`}</strong>
+        <span>{trap.bypassedByCode ? 'Механизм переведён в безопасный режим' : trap.triggered ? `Потеряно ${trap.damage} ${trap.effect === 'hull' ? 'корпуса' : 'энергии'}` : 'Механизм остановлен до захвата'}</span>
       </div>
       <div className="trap-timer" aria-hidden="true"><i /></div>
     </motion.div>
@@ -1079,7 +895,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
   const unresolved = !currentRoom.resolved && currentRoom.kind !== 'enemy'
   const startRoom = run.rooms.find((room) => room.id === ship.startRoomId)!
   const distanceToExit = Math.abs(currentRoom.x - startRoom.x) + Math.abs(currentRoom.y - startRoom.y)
-  const locked = Boolean(run.combat) || Boolean(run.trapEvent) || Boolean(travel)
+  const locked = Boolean(run.combat) || Boolean(run.trapEvent) || Boolean(run.randomEncounter) || Boolean(travel)
   const atExit = currentRoom.id === ship.startRoomId
 
   const requestTravel = (roomId: string) => {
@@ -1130,7 +946,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
       </div>
 
       <AnimatePresence>
-        {run.notice && !run.combat && !run.trapEvent && (
+        {run.notice && !run.combat && !run.trapEvent && !run.randomEncounter && (
           <motion.button className={`notice ${run.notice === SHIP_SURVEY_COMPLETE_NOTICE ? 'survey-complete' : ''}`} type="button" onClick={clearNotice} initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}>
             <span />{run.notice}
           </motion.button>
@@ -1142,6 +958,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
       {interactionOpen && unresolved && <RoomEvent room={currentRoom} run={run} onClose={() => setInteractionOpen(false)} />}
       {run.combat && <CombatSheet run={run} />}
       <AnimatePresence>{run.trapEvent && <TrapSequence run={run} />}</AnimatePresence>
+      {run.randomEncounter && <RandomEncounterOverlay encounter={run.randomEncounter} />}
       {travel && <TransitOverlay travel={travel} />}
     </section>
   )

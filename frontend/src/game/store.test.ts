@@ -8,12 +8,14 @@ import {
   START_ROOM_ID,
 } from './content'
 import { SHIP_SURVEY_COMPLETE_NOTICE, useGameStore } from './store'
+import { getDigitalLockConfig } from './randomEvents'
 
 describe('mock expedition state', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     localStorage.clear()
     useGameStore.setState(useGameStore.getInitialState(), true)
+    useGameStore.setState({ movesUntilRandomEvent: 999 })
   })
 
   it('starts at the evacuation airlock with upgrade bonuses', () => {
@@ -71,6 +73,44 @@ describe('mock expedition state', () => {
     expect(useGameStore.getState().run?.currentRoomId).toBe('4:1')
     expect(useGameStore.getState().run?.previousRoomId).toBe(START_ROOM_ID)
     expect(useGameStore.getState().run?.energy).toBe(11)
+  })
+
+  it('schedules a non-repeating random encounter after the saved move countdown', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    useGameStore.setState({ movesUntilRandomEvent: 1, randomEventBag: ['digital-lock'], totalMoves: 6 })
+    useGameStore.getState().startRun()
+    useGameStore.getState().moveTo('4:1')
+
+    const state = useGameStore.getState()
+    expect(state.totalMoves).toBe(7)
+    expect(state.movesUntilRandomEvent).toBe(7)
+    expect(state.randomEventBag).toEqual([])
+    expect(state.run?.randomEncounter).toMatchObject({ kind: 'digital-lock' })
+  })
+
+  it('banks the fixed digital-lock reward and clears the encounter', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    const encounter = { id: 'digital-lock:7:123', kind: 'digital-lock' as const, seed: 123 }
+    useGameStore.setState({ run: { ...run, randomEncounter: encounter } })
+
+    useGameStore.getState().resolveRandomEvent({ status: 'success' })
+
+    expect(useGameStore.getState().run?.scrap).toBe(getDigitalLockConfig(123).reward)
+    expect(useGameStore.getState().run?.randomEncounter).toBeNull()
+  })
+
+  it('turns tablet data into room intel and a one-use trap bypass code', () => {
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({ run: { ...run, randomEncounter: { id: 'crew-tablet:8:1', kind: 'crew-tablet', seed: 1 } } })
+    useGameStore.getState().resolveRandomEvent({ status: 'success', choice: 'intel' })
+    expect(useGameStore.getState().run?.intelRoomIds).toHaveLength(3)
+
+    const withIntel = useGameStore.getState().run!
+    useGameStore.setState({ run: { ...withIntel, randomEncounter: { id: 'crew-tablet:9:2', kind: 'crew-tablet', seed: 2 } } })
+    useGameStore.getState().resolveRandomEvent({ status: 'success', choice: 'code' })
+    expect(useGameStore.getState().run?.trapBypassCharges).toBe(1)
   })
 
   it('ends the run at zero energy outside the evacuation airlock and retains 25 percent of scrap', () => {

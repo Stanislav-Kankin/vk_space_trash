@@ -15,6 +15,12 @@ test.beforeAll(async () => {
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('cosmic-scavenger-onboarding-v1', 'true')
+    if (!localStorage.getItem('cosmic-scavenger-progress')) {
+      localStorage.setItem('cosmic-scavenger-progress', JSON.stringify({
+        version: 4,
+        state: { totalMoves: 0, movesUntilRandomEvent: 999, randomEventBag: [] },
+      }))
+    }
   })
 })
 
@@ -104,6 +110,56 @@ test('sector map pans horizontally and keeps the first ship selectable', async (
   await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
   await page.screenshot({ path: 'test-results/visual/star-map-mobile.png' })
 })
+
+const randomEventCases = [
+  { kind: 'digital-lock', heading: /Соберите .*кнопок|микросхем|шестерёнок|камней/, selector: '.match-board' },
+  { kind: 'crew-tablet', heading: 'Планшет члена экипажа', selector: '.tablet-device' },
+  { kind: 'radiation', heading: 'Калибровка защиты', selector: '.radiation-rings' },
+  { kind: 'power-grid', heading: 'Замкните силовой контур', selector: '.power-grid' },
+  { kind: 'cargo-crane', heading: 'Магнитный захват', selector: '.crane-stage' },
+  { kind: 'star-chart', heading: 'Звёздное совмещение', selector: '.star-scope' },
+] as const
+
+for (const eventCase of randomEventCases) {
+  test(`random event ${eventCase.kind} renders on mobile`, async ({ page }) => {
+    const viewport = eventCase.kind === 'digital-lock' ? { width: 320, height: 568 } : { width: 390, height: 844 }
+    await page.setViewportSize(viewport)
+    await page.goto('/?vk_platform=mobile_android&vk_app_id=54711325')
+    await page.evaluate((kind) => {
+      const saved = JSON.parse(localStorage.getItem('cosmic-scavenger-progress')!)
+      saved.version = 4
+      saved.state.totalMoves = 6
+      saved.state.movesUntilRandomEvent = 1
+      saved.state.randomEventBag = [kind]
+      localStorage.setItem('cosmic-scavenger-progress', JSON.stringify(saved))
+    }, eventCase.kind)
+    await page.reload()
+    await launchExpedition(page)
+    await page.locator('[data-destination-id="4:1"]').click()
+
+    await expect(page.getByRole('heading', { name: eventCase.heading })).toBeVisible()
+    await expect(page.locator(eventCase.selector)).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+    const eventHeader = page.locator(eventCase.kind === 'digital-lock' ? '.match-three-header' : '.random-event-header')
+    expect(await eventHeader.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingRight))).toBeGreaterThanOrEqual(88)
+
+    if (eventCase.kind === 'power-grid') {
+      const requiredSegments = page.locator('.power-grid button.required')
+      for (let index = 0; index < await requiredSegments.count(); index += 1) await requiredSegments.nth(index).click()
+      await expect(page.locator('.power-event.solved')).toBeVisible()
+      await expect(page.locator('.power-reward')).toBeVisible()
+    }
+
+    if (eventCase.kind === 'star-chart') {
+      const layers = page.locator('.star-controls button')
+      for (let index = 0; index < await layers.count(); index += 1) await layers.nth(index).click()
+      await expect(page.locator('.star-event.solved')).toBeVisible()
+    }
+
+    await page.waitForTimeout(350)
+    await page.screenshot({ path: `test-results/visual/random-${eventCase.kind}.png` })
+  })
+}
 
 test('sorting matrix opens as a 7 by 7 five-move puzzle on the first ship', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 })
@@ -232,8 +288,11 @@ test('equips two tools and opens the 6 by 6 Hephaestus deck', async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 })
   await page.addInitScript(() => {
     localStorage.setItem('cosmic-scavenger-progress', JSON.stringify({
-      version: 3,
+      version: 4,
       state: {
+        totalMoves: 0,
+        movesUntilRandomEvent: 999,
+        randomEventBag: [],
         bankedScrap: 200,
         upgrades: {
           hull: 0,
