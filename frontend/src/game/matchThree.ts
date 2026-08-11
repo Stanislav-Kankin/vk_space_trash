@@ -14,6 +14,16 @@ export interface MatchMoveResult {
   valid: boolean
   cleared: number
   redCleared: number
+  cascades: MatchCascadeStep[]
+  reshuffled: boolean
+}
+
+export interface MatchCascadeStep {
+  board: MatchTile[][]
+  matches: MatchPoint[]
+  collapsedBoard: MatchTile[][]
+  fallOffsets: number[][]
+  newTiles: boolean[][]
 }
 
 const tileTypes: readonly MatchTile[] = ['button', 'chip', 'gear', 'rock']
@@ -128,18 +138,29 @@ export const createMatchBoard = (random: () => number = Math.random): MatchTile[
 const collapse = (board: MatchTile[][], matches: readonly MatchPoint[], random: () => number) => {
   const removed = new Set(matches.map(({ row, column }) => `${row}:${column}`))
   const next = Array.from({ length: MATCH_BOARD_SIZE }, () => Array<MatchTile>(MATCH_BOARD_SIZE))
+  const fallOffsets = Array.from({ length: MATCH_BOARD_SIZE }, () => Array<number>(MATCH_BOARD_SIZE).fill(0))
+  const newTiles = Array.from({ length: MATCH_BOARD_SIZE }, () => Array<boolean>(MATCH_BOARD_SIZE).fill(false))
 
   for (let column = 0; column < MATCH_BOARD_SIZE; column += 1) {
-    const remaining: MatchTile[] = []
+    const remaining: { tile: MatchTile; sourceRow: number }[] = []
     for (let row = MATCH_BOARD_SIZE - 1; row >= 0; row -= 1) {
-      if (!removed.has(`${row}:${column}`)) remaining.push(board[row][column])
+      if (!removed.has(`${row}:${column}`)) remaining.push({ tile: board[row][column], sourceRow: row })
     }
+    const removedCount = MATCH_BOARD_SIZE - remaining.length
     for (let row = MATCH_BOARD_SIZE - 1, index = 0; row >= 0; row -= 1, index += 1) {
-      next[row][column] = remaining[index] ?? randomTile(random)
+      const existing = remaining[index]
+      if (existing) {
+        next[row][column] = existing.tile
+        fallOffsets[row][column] = existing.sourceRow - row
+      } else {
+        next[row][column] = randomTile(random)
+        fallOffsets[row][column] = -removedCount
+        newTiles[row][column] = true
+      }
     }
   }
 
-  return next
+  return { board: next, fallOffsets, newTiles }
 }
 
 export const resolveMatchMove = (
@@ -148,23 +169,37 @@ export const resolveMatchMove = (
   second: MatchPoint,
   random: () => number = Math.random,
 ): MatchMoveResult => {
-  if (!areAdjacent(first, second)) return { board: cloneBoard(board), valid: false, cleared: 0, redCleared: 0 }
+  if (!areAdjacent(first, second)) {
+    return { board: cloneBoard(board), valid: false, cleared: 0, redCleared: 0, cascades: [], reshuffled: false }
+  }
 
   let next = swap(board, first, second)
   let matches = findMatches(next)
-  if (matches.length === 0) return { board: cloneBoard(board), valid: false, cleared: 0, redCleared: 0 }
+  if (matches.length === 0) {
+    return { board: cloneBoard(board), valid: false, cleared: 0, redCleared: 0, cascades: [], reshuffled: false }
+  }
 
   let cleared = 0
   let redCleared = 0
   let cascades = 0
+  const cascadeSteps: MatchCascadeStep[] = []
   while (matches.length > 0 && cascades < 12) {
     cleared += matches.length
     redCleared += matches.filter(({ row, column }) => next[row][column] === 'button').length
-    next = collapse(next, matches, random)
+    const collapsed = collapse(next, matches, random)
+    cascadeSteps.push({
+      board: cloneBoard(next),
+      matches: matches.map((match) => ({ ...match })),
+      collapsedBoard: cloneBoard(collapsed.board),
+      fallOffsets: collapsed.fallOffsets.map((row) => [...row]),
+      newTiles: collapsed.newTiles.map((row) => [...row]),
+    })
+    next = collapsed.board
     matches = findMatches(next)
     cascades += 1
   }
 
-  if (!hasPossibleRedMove(next)) next = createMatchBoard(random)
-  return { board: next, valid: true, cleared, redCleared }
+  const reshuffled = !hasPossibleRedMove(next)
+  if (reshuffled) next = createMatchBoard(random)
+  return { board: next, valid: true, cleared, redCleared, cascades: cascadeSteps, reshuffled }
 }

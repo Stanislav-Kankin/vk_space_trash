@@ -787,23 +787,32 @@ function MatchThreeEvent({ onClose }: { onClose: () => void }) {
   const [message, setMessage] = useState('Поменяйте местами соседние элементы.')
   const [boardVersion, setBoardVersion] = useState(0)
   const [finished, setFinished] = useState(false)
-  const finishTimer = useRef<number | null>(null)
+  const [animating, setAnimating] = useState(false)
+  const [clearingTiles, setClearingTiles] = useState<Set<string>>(() => new Set())
+  const [tileMotion, setTileMotion] = useState<{ x: number; y: number; fresh: boolean }[][] | null>(null)
+  const animationTimers = useRef<number[]>([])
 
   useEffect(() => () => {
-    if (finishTimer.current) window.clearTimeout(finishTimer.current)
+    animationTimers.current.forEach((timer) => window.clearTimeout(timer))
   }, [])
+
+  const wait = (duration: number) => new Promise<void>((resolve) => {
+    const timer = window.setTimeout(resolve, duration)
+    animationTimers.current.push(timer)
+  })
 
   const finish = (success: boolean) => {
     setFinished(true)
     setMessage(success ? 'Кассета разблокирована. +15 лома.' : 'Ходы закончились. Матрица заблокирована.')
-    finishTimer.current = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       completePuzzle(success)
       onClose()
     }, 1100)
+    animationTimers.current.push(timer)
   }
 
-  const selectTile = (point: MatchPoint) => {
-    if (finished) return
+  const selectTile = async (point: MatchPoint) => {
+    if (finished || animating) return
     if (!selected) {
       setSelected(point)
       return
@@ -813,7 +822,8 @@ function MatchThreeEvent({ onClose }: { onClose: () => void }) {
       return
     }
 
-    const result = resolveMatchMove(board, selected, point)
+    const first = selected
+    const result = resolveMatchMove(board, first, point)
     if (!result.valid) {
       setSelected(point)
       setMessage('Здесь нет линии из трёх. Выберите другой элемент.')
@@ -823,13 +833,70 @@ function MatchThreeEvent({ onClose }: { onClose: () => void }) {
 
     const nextMoves = movesLeft - 1
     const nextRed = redCollected + result.redCleared
-    setBoard(result.board)
-    setBoardVersion((version) => version + 1)
+    const emptyMotion = () => board.map((row) => row.map(() => ({ x: 0, y: 0, fresh: false })))
+    const swapMotion = emptyMotion()
+    swapMotion[first.row][first.column] = {
+      x: (point.column - first.column) * 44,
+      y: (point.row - first.row) * 44,
+      fresh: false,
+    }
+    swapMotion[point.row][point.column] = {
+      x: (first.column - point.column) * 44,
+      y: (first.row - point.row) * 44,
+      fresh: false,
+    }
+
+    setAnimating(true)
     setMovesLeft(nextMoves)
-    setRedCollected(nextRed)
     setSelected(null)
-    setMessage(result.redCleared > 0 ? `Красных элементов: +${result.redCleared}` : `Собрано элементов: ${result.cleared}`)
+    setBoard(result.cascades[0].board)
+    setTileMotion(swapMotion)
+    setBoardVersion((version) => version + 1)
+    setMessage('Контур перестраивает матрицу...')
     gameAudio.play('inspect')
+
+    await wait(210)
+    setTileMotion(null)
+
+    let cascadeRed = 0
+    for (let index = 0; index < result.cascades.length; index += 1) {
+      const cascade = result.cascades[index]
+      const matched = new Set(cascade.matches.map(({ row, column }) => `${row}:${column}`))
+      const redInCascade = cascade.matches.filter(({ row, column }) => cascade.board[row][column] === 'button').length
+      cascadeRed += redInCascade
+      setBoard(cascade.board)
+      setClearingTiles(matched)
+      setMessage(index === 0 ? 'Совпадение зафиксировано.' : `Каскад ${index + 1}: новые совпадения.`)
+      gameAudio.play('inspect')
+      await wait(420)
+
+      setClearingTiles(new Set())
+      setBoard(cascade.collapsedBoard)
+      setTileMotion(cascade.fallOffsets.map((row, rowIndex) => row.map((offset, columnIndex) => ({
+        x: 0,
+        y: offset * 44,
+        fresh: cascade.newTiles[rowIndex][columnIndex],
+      }))))
+      setBoardVersion((version) => version + 1)
+      setRedCollected(redCollected + cascadeRed)
+      await wait(390)
+      setTileMotion(null)
+    }
+
+    if (result.reshuffled) {
+      setBoard(result.board)
+      setTileMotion(result.board.map((row) => row.map(() => ({ x: 0, y: -308, fresh: true }))))
+      setBoardVersion((version) => version + 1)
+      setMessage('Нет доступных красных линий. Матрица перемешана.')
+      await wait(420)
+      setTileMotion(null)
+    } else {
+      setBoard(result.board)
+    }
+
+    setRedCollected(nextRed)
+    setAnimating(false)
+    setMessage(result.redCleared > 0 ? `Красных элементов: +${result.redCleared}` : `Собрано элементов: ${result.cleared}`)
 
     if (nextRed >= MATCH_RED_TARGET) finish(true)
     else if (nextMoves === 0) finish(false)
@@ -848,22 +915,31 @@ function MatchThreeEvent({ onClose }: { onClose: () => void }) {
           {(Object.keys(matchTileLabels) as MatchTile[]).map((tile) => <i className={`match-mini match-${tile}`} key={tile} title={matchTileLabels[tile]} />)}
         </div>
       </div>
-      <div className="match-board" role="grid" aria-label="Сортировочная матрица семь на семь">
+      <div className={`match-board ${animating ? 'animating' : ''}`} role="grid" aria-label="Сортировочная матрица семь на семь">
         {board.flatMap((row, rowIndex) => row.map((tile, columnIndex) => {
           const active = selected?.row === rowIndex && selected.column === columnIndex
+          const clearing = clearingTiles.has(`${rowIndex}:${columnIndex}`)
+          const motionState = tileMotion?.[rowIndex][columnIndex]
           return (
             <motion.button
               key={`${boardVersion}:${rowIndex}:${columnIndex}:${tile}`}
-              className={`match-tile match-${tile} ${active ? 'selected' : ''}`}
+              className={`match-tile match-${tile} ${active ? 'selected' : ''} ${clearing ? 'clearing' : ''}`}
               type="button"
               role="gridcell"
+              data-row={rowIndex}
+              data-column={columnIndex}
+              data-tile={tile}
               aria-label={`${matchTileLabels[tile]}, ряд ${rowIndex + 1}, колонка ${columnIndex + 1}`}
               aria-selected={active}
-              disabled={finished}
-              onClick={() => selectTile({ row: rowIndex, column: columnIndex })}
-              initial={{ scale: 0.82, opacity: 0.35 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.16, delay: (rowIndex + columnIndex) * 0.006 }}
+              disabled={finished || animating}
+              onClick={() => { void selectTile({ row: rowIndex, column: columnIndex }) }}
+              initial={{
+                x: motionState?.x ?? 0,
+                y: motionState?.y ?? 0,
+                opacity: motionState?.fresh ? 0.2 : 1,
+              }}
+              animate={{ x: 0, y: 0, opacity: 1 }}
+              transition={{ duration: motionState ? 0.34 : 0.12, ease: [0.22, 0.75, 0.25, 1] }}
             ><span /></motion.button>
           )
         }))}

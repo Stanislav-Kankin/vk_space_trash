@@ -1911,6 +1911,12 @@
   background: #11191c;
   border: 1px solid #53666b;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.match-board.animating {
+  border-color: var(--amber);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42), 0 0 18px rgba(240, 179, 74, 0.14);
 }
 
 .match-tile {
@@ -1937,6 +1943,22 @@
 .match-tile.selected::after {
   border-color: #fff;
   box-shadow: inset 0 0 0 1px #071012, 0 0 12px rgba(88, 215, 223, 0.5);
+}
+
+.match-tile:disabled { cursor: default; }
+
+.match-tile.clearing {
+  z-index: 2;
+  background: #20282a;
+}
+
+.match-tile.clearing span {
+  animation: match-tile-clear 420ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.match-tile.clearing::after {
+  border-color: rgba(255, 255, 255, 0.72);
+  animation: match-cell-flash 420ms ease-out both;
 }
 
 .match-tile span,
@@ -2030,6 +2052,19 @@
   color: var(--muted);
   font-size: 8px;
   line-height: 1.35;
+}
+
+@keyframes match-tile-clear {
+  0% { opacity: 1; transform: scale(1); filter: brightness(1); }
+  42% { opacity: 1; transform: scale(1.24); filter: brightness(1.55); }
+  72% { opacity: 0.78; transform: scale(1.08); filter: brightness(1.8); }
+  100% { opacity: 0; transform: scale(0.12); filter: brightness(2); }
+}
+
+@keyframes match-cell-flash {
+  0% { opacity: 0; transform: scale(0.7); }
+  42% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.08); }
 }
 
 /* Combat */

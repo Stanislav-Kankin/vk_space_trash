@@ -124,6 +124,49 @@ test('sorting matrix opens as a 7 by 7 five-move puzzle on the first ship', asyn
   expect(tile?.height).toBeGreaterThanOrEqual(44)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
   await page.screenshot({ path: 'test-results/visual/match-three-320x568.png' })
+
+  const cells = await matrix.getByRole('gridcell').evaluateAll((elements) => elements.map((element) => ({
+    row: Number((element as HTMLElement).dataset.row),
+    column: Number((element as HTMLElement).dataset.column),
+    tile: (element as HTMLElement).dataset.tile!,
+  })))
+  const board = Array.from({ length: 7 }, () => Array<string>(7))
+  cells.forEach((cell) => { board[cell.row][cell.column] = cell.tile })
+  const hasMatch = (candidate: string[][]) => {
+    for (let row = 0; row < 7; row += 1) {
+      for (let column = 0; column < 7; column += 1) {
+        if (column <= 4 && candidate[row][column] === candidate[row][column + 1] && candidate[row][column] === candidate[row][column + 2]) return true
+        if (row <= 4 && candidate[row][column] === candidate[row + 1][column] && candidate[row][column] === candidate[row + 2][column]) return true
+      }
+    }
+    return false
+  }
+  let validSwap: [{ row: number; column: number }, { row: number; column: number }] | null = null
+  for (let row = 0; row < 7 && !validSwap; row += 1) {
+    for (let column = 0; column < 7 && !validSwap; column += 1) {
+      for (const neighbour of [{ row, column: column + 1 }, { row: row + 1, column }]) {
+        if (neighbour.row >= 7 || neighbour.column >= 7) continue
+        const candidate = board.map((candidateRow) => [...candidateRow])
+        ;[candidate[row][column], candidate[neighbour.row][neighbour.column]] = [candidate[neighbour.row][neighbour.column], candidate[row][column]]
+        if (hasMatch(candidate)) validSwap = [{ row, column }, neighbour]
+      }
+    }
+  }
+  expect(validSwap).not.toBeNull()
+  const [first, second] = validSwap!
+  await matrix.locator(`[data-row="${first.row}"][data-column="${first.column}"]`).click()
+  await matrix.locator(`[data-row="${second.row}"][data-column="${second.column}"]`).click()
+  await expect(matrix).toHaveClass(/animating/)
+  await expect(page.locator('.match-tile.clearing').first()).toBeVisible()
+  await page.screenshot({ path: 'test-results/visual/match-three-clearing.png' })
+  await expect(page.locator('.match-tile.clearing')).toHaveCount(0)
+  await expect.poll(() => matrix.getByRole('gridcell').evaluateAll((elements) => elements.some((element) => {
+    const transform = getComputedStyle(element).transform
+    return transform !== 'none' && transform !== 'matrix(1, 0, 0, 1, 0, 0)'
+  }))).toBe(true)
+  await page.screenshot({ path: 'test-results/visual/match-three-falling.png' })
+  await expect(matrix).not.toHaveClass(/animating/, { timeout: 15_000 })
+  await expect(page.getByText('4', { exact: true })).toBeVisible()
 })
 
 test('evacuated survey progress is restored on the same ship', async ({ page }) => {

@@ -41,5 +41,8 @@ describe('sorting matrix', () => {
     expect(result.valid).toBe(true)
     expect(result.redCleared).toBeGreaterThanOrEqual(3)
     expect(result.cleared).toBeGreaterThanOrEqual(3)
+    expect(result.cascades.length).toBeGreaterThanOrEqual(1)
+    expect(result.cascades[0].matches).toHaveLength(3)
+    expect(result.cascades[0].fallOffsets.some((row) => row.some((offset) => offset < 0))).toBe(true)
   })
 })
