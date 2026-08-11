@@ -43,6 +43,10 @@ test('first launch briefing explains the expedition and can be reopened', async 
 
   await page.getByRole('button', { name: 'Дальше' }).click()
   await expect(page.getByRole('heading', { name: 'Каждый переход стоит энергии' })).toBeVisible()
+  await expect(page.getByLabel('Пример управления картой корабля')).toBeVisible()
+  await expect(page.getByText('ОТКРЫТЬ КАРТУ')).toBeVisible()
+  await expect(page.getByText('Нажмите для перехода')).toBeVisible()
+  await page.screenshot({ path: 'test-results/visual/onboarding-map-320x568.png' })
   await page.getByRole('button', { name: 'Дальше' }).click()
   await expect(page.getByRole('heading', { name: 'Инструмент решает, что можно забрать' })).toBeVisible()
   await page.getByRole('button', { name: 'Дальше' }).click()
@@ -54,7 +58,6 @@ test('first launch briefing explains the expedition and can be reopened', async 
 
   await page.goto('/')
   await expect(page.getByRole('dialog')).toBeHidden()
-  await page.getByRole('button', { name: 'Настройки' }).click()
   await page.getByRole('button', { name: 'Повторить инструктаж' }).click()
   await expect(page.getByRole('heading', { name: 'Соберите лом и вернитесь' })).toBeVisible()
 })
@@ -64,6 +67,8 @@ for (const viewport of viewports) {
     await page.setViewportSize(viewport)
     await page.goto('/')
     await expect(page.getByRole('button', { name: /Начать вылазку/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Улучшения' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Повторить инструктаж' })).toBeVisible()
     await page.waitForTimeout(450)
 
     const layout = await page.evaluate(() => ({
@@ -87,7 +92,7 @@ for (const viewport of viewports) {
 test('workshop remains readable on the smallest viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await page.getByRole('button', { name: 'Улучшения' }).click()
   await expect(page.getByRole('heading', { name: 'Модули корабля' })).toBeVisible()
   await page.waitForTimeout(450)
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
@@ -306,7 +311,7 @@ test('equips two tools and opens the 6 by 6 Hephaestus deck', async ({ page }) =
           shieldAmplifier: 0,
         },
         tools: {
-          mechanic: { owned: true, durability: 12 },
+          mechanic: { owned: true, durability: 5 },
           laser: { owned: false, durability: 0 },
           grapple: { owned: false, durability: 0 },
           diagnostic: { owned: false, durability: 0 },
@@ -323,7 +328,7 @@ test('equips two tools and opens the 6 by 6 Hephaestus deck', async ({ page }) =
     }))
   })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await page.getByRole('button', { name: 'Улучшения' }).click()
   await page.getByRole('button', { name: 'Инструменты' }).click()
 
   const laser = page.getByRole('article').filter({ hasText: 'Лазерный резак' })
@@ -336,6 +341,10 @@ test('equips two tools and opens the 6 by 6 Hephaestus deck', async ({ page }) =
   await page.getByRole('button', { name: /Начать вылазку/i }).click()
   await page.getByRole('button', { name: 'Исследовать промышленный переработчик Гефест-9' }).click()
   await expect(page.getByRole('heading', { name: 'Промышленный переработчик' })).toBeVisible()
+  await expect(page.getByLabel('Инструменты выбранные для вылазки')).toContainText('Инструмент механика')
+  await expect(page.getByLabel('Инструменты выбранные для вылазки')).toContainText('Лазерный резак')
+  await expect(page.getByLabel('Инструменты выбранные для вылазки')).toContainText('5/12 прочности')
+  await page.screenshot({ path: 'test-results/visual/tool-loadout-before-launch.png' })
   await page.getByRole('button', { name: 'Стыковаться' }).click()
   await expect(page.getByRole('heading', { name: 'Промышленный переработчик' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Стыковочный шлюз' })).toBeVisible()
@@ -352,8 +361,15 @@ test('equips two tools and opens the 6 by 6 Hephaestus deck', async ({ page }) =
 
   await page.locator('[data-destination-id="5:4"]').click()
   await page.getByRole('button', { name: 'Осмотреть контейнер' }).click()
-  await page.getByRole('button', { name: /Вскрыть контейнер Инструмент механика/ }).click()
+  await expect(page.getByLabel('Инструменты для действия')).toContainText('ОСНОВНОЙ · РАСХОД 1')
+  await expect(page.getByLabel('Инструменты для действия')).toContainText('ЗАМЕНА СО ШТРАФОМ · РАСХОД 3')
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'test-results/visual/tool-requirements.png' })
+  await page.getByRole('button', { name: /Вскрыть контейнер.*Инструмент механика/ }).click()
   await expect(page.getByText(/Инструмент механика: −1 прочности/)).toBeVisible()
+  await expect(page.getByText(/Низкая прочность: Инструмент механика, осталось 4/)).toBeVisible()
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'test-results/visual/tool-low-durability-warning.png' })
   await page.locator('[data-destination-id="5:5"]').click()
   await expect(page.getByText(/d20 \d+ \+ чутьё 0 = \d+ против 22/)).toBeVisible()
   const trapSequence = page.locator('.trap-sequence')
@@ -382,15 +398,17 @@ test('desktop VK iframe uses a wide layout without page scrolling', async ({ pag
   const hangar = await page.locator('.hangar-screen').boundingBox()
   const visual = await page.locator('.hangar-visual').boundingBox()
   const consolePanel = await page.locator('.hangar-console').boundingBox()
-  const upgradesButton = await page.getByRole('button', { name: 'Улучшения корабля' }).boundingBox()
+  const upgradesButton = await page.getByRole('button', { name: 'Улучшения' }).boundingBox()
+  const tutorialButton = await page.getByRole('button', { name: 'Повторить инструктаж' }).boundingBox()
   expect(hangar?.width).toBeGreaterThan(900)
   expect(visual?.x).toBeLessThan(consolePanel?.x ?? 0)
   expect(upgradesButton?.y ?? 701).toBeGreaterThanOrEqual(0)
   expect((upgradesButton?.y ?? 701) + (upgradesButton?.height ?? 0)).toBeLessThanOrEqual(700)
+  expect((tutorialButton?.y ?? 701) + (tutorialButton?.height ?? 0)).toBeLessThanOrEqual(700)
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(700)
   await page.screenshot({ path: 'test-results/visual/desktop-vk-hangar.png' })
 
-  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await page.getByRole('button', { name: 'Улучшения' }).click()
   await expect(page.getByRole('heading', { name: 'Модули корабля' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(700)
   await page.screenshot({ path: 'test-results/visual/desktop-vk-workshop.png' })
@@ -423,14 +441,14 @@ test('alpha progress and preferences survive reload and can be reset', async ({ 
   await expect.poll(() => page.evaluate(() => performance.getEntriesByType('resource').filter((entry) => entry.name.includes('room-')).length)).toBeGreaterThanOrEqual(5)
 
   await page.getByRole('button', { name: 'Выключить звук' }).click()
-  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await page.getByRole('button', { name: 'Улучшения' }).click()
   const battery = page.getByRole('article').filter({ hasText: 'Резервная батарея' })
   await battery.getByRole('button').click()
   await expect(battery.getByText('УР. 1/10')).toBeVisible()
 
   await page.reload()
   await expect(page.getByRole('button', { name: 'Включить звук' })).toBeVisible()
-  await page.getByRole('button', { name: 'Улучшения корабля' }).click()
+  await page.getByRole('button', { name: 'Улучшения' }).click()
   await expect(page.getByRole('article').filter({ hasText: 'Резервная батарея' }).getByText('УР. 1/10')).toBeVisible()
   await page.getByRole('button', { name: 'Вернуться в ангар' }).click()
   await page.getByRole('button', { name: 'Настройки' }).click()
@@ -489,10 +507,10 @@ test('completes a risky expedition and extracts at the starting airlock', async 
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/cargo-location.png' })
   await page.getByRole('button', { name: 'Осмотреть контейнер' }).click()
-  await expect(page.getByRole('button', { name: /Вскрыть контейнер Инструмент механика/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Вскрыть контейнер.*Инструмент механика/i })).toBeVisible()
   await page.waitForTimeout(450)
   await page.screenshot({ path: 'test-results/visual/storage-event.png' })
-  await page.getByRole('button', { name: /Вскрыть контейнер Инструмент механика/i }).click()
+  await page.getByRole('button', { name: /Вскрыть контейнер.*Инструмент механика/i }).click()
 
   await page.locator('[data-destination-id="3:1"]').click()
   await page.locator('[data-destination-id="2:1"]').click()

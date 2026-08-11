@@ -8,7 +8,7 @@ import {
   START_ROOM_ID,
 } from './content'
 import { SHIP_SURVEY_COMPLETE_NOTICE, useGameStore } from './store'
-import { getDigitalLockConfig } from './randomEvents'
+import { getDigitalLockConfig, getRadiationConfig } from './randomEvents'
 
 describe('mock expedition state', () => {
   beforeEach(() => {
@@ -16,6 +16,14 @@ describe('mock expedition state', () => {
     localStorage.clear()
     useGameStore.setState(useGameStore.getInitialState(), true)
     useGameStore.setState({ movesUntilRandomEvent: 999 })
+  })
+
+  it('makes each radiation ring slightly faster than the previous one', () => {
+    const { durations } = getRadiationConfig(814)
+    expect(durations[1]).toBeLessThan(durations[0])
+    expect(durations[2]).toBeLessThan(durations[1])
+    expect(durations[1] / durations[0]).toBeCloseTo(0.88, 2)
+    expect(durations[2] / durations[1]).toBeCloseTo(0.88, 2)
   })
 
   it('starts at the evacuation airlock with upgrade bonuses', () => {
@@ -409,10 +417,31 @@ describe('mock expedition state', () => {
     useGameStore.getState().chooseRoomAction('primary')
     expect(useGameStore.getState().tools.mechanic).toEqual({ owned: false, durability: 0 })
     expect(useGameStore.getState().loadout).not.toContain('mechanic')
+    expect(useGameStore.getState().run?.notice).toContain('сломался')
 
     useGameStore.getState().buyTool('mechanic')
     expect(useGameStore.getState().tools.mechanic).toEqual({ owned: true, durability: 12 })
     expect(useGameStore.getState().bankedScrap).toBe(12)
+  })
+
+  it('warns when a used tool drops below five durability', () => {
+    useGameStore.setState({
+      tools: { ...useGameStore.getState().tools, mechanic: { owned: true, durability: 5 } },
+    })
+    useGameStore.getState().startRun()
+    const run = useGameStore.getState().run!
+    useGameStore.setState({
+      run: {
+        ...run,
+        currentRoomId: '4:1',
+        rooms: run.rooms.map((room) => room.id === '4:1' ? { ...room, visited: true } : room),
+      },
+    })
+
+    useGameStore.getState().chooseRoomAction('primary')
+
+    expect(useGameStore.getState().tools.mechanic.durability).toBe(4)
+    expect(useGameStore.getState().run?.notice).toContain('Низкая прочность: Инструмент механика, осталось 4')
   })
 
   it('repairs an intact tool one point at the configured price', () => {

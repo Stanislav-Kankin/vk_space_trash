@@ -363,15 +363,22 @@ export const useGameStore = create<GameState>()(persist((set, get) => ({
       const loot = salvage.maxLoot === 0
         ? 0
         : seededLoot(run.shipId, room, salvage.minLoot, salvage.maxLoot) + state.upgrades.salvageBonus
+      const nextTools = consumeTool(state, tool, wear)
+      const remainingDurability = nextTools[tool].durability
+      const toolName = getToolDefinition(tool).name
+      const durabilityWarning = remainingDurability === 0
+        ? ` Внимание: ${toolName} сломался и удалён из комплекта.`
+        : remainingDurability < 5
+          ? ` Низкая прочность: ${toolName}, осталось ${remainingDurability}.`
+          : ''
       const nextRun: ExpeditionRun = {
         ...run,
         scrap: run.scrap + loot,
         rooms: run.rooms.map((item) => item.id === room.id ? { ...item, resolved: true } : item),
         notice: loot > 0
-          ? `+${loot} лома. ${getToolDefinition(tool).name}: −${wear} прочности.`
-          : `Проход открыт. ${getToolDefinition(tool).name}: −${wear} прочности.`,
+          ? `+${loot} лома. ${toolName}: −${wear} прочности.${durabilityWarning}`
+          : `Проход открыт. ${toolName}: −${wear} прочности.${durabilityWarning}`,
       }
-      const nextTools = consumeTool(state, tool, wear)
       set({
         tools: nextTools,
         loadout: nextTools[tool].owned ? state.loadout : state.loadout.filter((key) => key !== tool),

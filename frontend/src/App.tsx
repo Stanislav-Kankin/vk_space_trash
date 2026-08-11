@@ -272,7 +272,7 @@ function TopBar({ onSettings, sound, onSound }: { onSettings: () => void; sound:
   )
 }
 
-function HangarScreen({ onSettings, sound, onSound }: { onSettings: () => void; sound: boolean; onSound: () => void }) {
+function HangarScreen({ onSettings, onTutorial, sound, onSound }: { onSettings: () => void; onTutorial: () => void; sound: boolean; onSound: () => void }) {
   const bankedScrap = useGameStore((state) => state.bankedScrap)
   const levels = useGameStore((state) => state.upgrades)
   const setScreen = useGameStore((state) => state.setScreen)
@@ -305,7 +305,10 @@ function HangarScreen({ onSettings, sound, onSound }: { onSettings: () => void; 
           <span><small>МАРШРУТ ГОТОВ</small>Начать вылазку</span>
         </button>
         <button className="secondary-action" type="button" onClick={() => setScreen('upgrades')}>
-          <Icon20WrenchOutline /> Улучшения корабля
+          <Icon20WrenchOutline /> Улучшения
+        </button>
+        <button className="secondary-action tutorial-shortcut" type="button" onClick={onTutorial}>
+          <Icon20HelpOutline /> Повторить инструктаж
         </button>
       </div>
     </section>
@@ -375,7 +378,7 @@ function StarMapScreen() {
       </div>
 
       <footer className="star-map-selection">
-        <div className="target-summary"><span>ВЫБРАННЫЙ ОБЪЕКТ</span><h2>{selectedShip.subtitle}</h2><p>{selectedShip.description}</p></div>
+        <div className="target-summary"><span>ВЫБРАННЫЙ ОБЪЕКТ</span><h2>{selectedShip.subtitle}</h2><p>{selectedShip.description}</p><ExpeditionLoadoutSummary /></div>
         <div className="survey-progress">
           <div><span>РАЗВЕДАНО</span><strong>{completion}%</strong></div>
           <div className="survey-track"><span style={{ width: `${completion}%` }} /></div>
@@ -409,6 +412,35 @@ const toolIcons: Record<ToolKey, ReactNode> = {
   diagnostic: <Icon20CompassOutline />,
   decoder: <Icon20LockOutline />,
   sealant: <Icon20ShieldLineOutline />,
+}
+
+function ExpeditionLoadoutSummary() {
+  const tools = useGameStore((state) => state.tools)
+  const loadout = useGameStore((state) => state.loadout)
+  const durabilityLevel = useGameStore((state) => state.upgrades.toolDurability)
+  const slots: (ToolKey | null)[] = [...loadout.slice(0, 2), ...Array.from({ length: Math.max(0, 2 - loadout.length) }, () => null)]
+
+  return (
+    <div className="expedition-loadout" aria-label="Инструменты выбранные для вылазки">
+      <div className="expedition-loadout-heading"><span>КОМПЛЕКТ ВЫЛАЗКИ</span><small>{loadout.length}/2 · меняется в мастерской</small></div>
+      <div className="expedition-loadout-slots">
+        {slots.map((key, index) => {
+          if (!key) return <div className="loadout-slot empty" key={`empty-${index}`}><i>+</i><span><strong>Свободный слот</strong><small>Инструмент не выбран</small></span></div>
+          const definition = getToolDefinition(key)
+          const durability = tools[key].durability
+          const maxDurability = getToolMaxDurability(key, durabilityLevel)
+          const low = durability < 5
+          return (
+            <div className={`loadout-slot ${low ? 'low' : ''}`} key={key}>
+              <i>{toolIcons[key]}</i>
+              <span><strong>{definition.name}</strong><small>{durability}/{maxDurability} прочности</small></span>
+              {low && <em>НИЗКИЙ ЗАПАС</em>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 type WorkshopTab = UpgradeCategory | 'tools'
@@ -728,6 +760,13 @@ function RoomEvent({ room, run, onClose }: { room: Room; run: ExpeditionRun; onC
     && tools[salvage.auxiliaryTool].durability >= 3,
   )
 
+  const toolStatus = (key: ToolKey, wear: number) => {
+    if (!tools[key].owned) return 'НЕТ ИНСТРУМЕНТА'
+    if (!loadout.includes(key)) return 'НЕ В КОМПЛЕКТЕ'
+    if (tools[key].durability < wear) return 'НЕ ХВАТАЕТ ПРОЧНОСТИ'
+    return `ГОТОВ · ${tools[key].durability} → ${tools[key].durability - wear}`
+  }
+
   const act = (choice: 'primary' | 'auxiliary' | 'secondary') => {
     choose(choice)
     onClose()
@@ -741,20 +780,34 @@ function RoomEvent({ room, run, onClose }: { room: Room; run: ExpeditionRun; onC
         <p className="event-eyebrow">{copy.eyebrow}</p>
         <h2>{room.title ?? copy.title}</h2>
         <p className="event-body">{room.description ?? copy.body}</p>
+        {salvage && <div className="tool-requirements" aria-label="Инструменты для действия">
+          <span>ТРЕБУЕТСЯ ДЛЯ ДЕЙСТВИЯ</span>
+          <div className={primaryAvailable ? 'available' : 'missing'}>
+            <i>{toolIcons[salvage.primaryTool]}</i>
+            <p><small>ОСНОВНОЙ · РАСХОД 1</small><strong>{primaryTool?.name}</strong></p>
+            <em>{toolStatus(salvage.primaryTool, 1)}</em>
+          </div>
+          {salvage.auxiliaryTool && auxiliaryTool && <div className={auxiliaryAvailable ? 'available auxiliary' : 'missing auxiliary'}>
+            <i>{toolIcons[salvage.auxiliaryTool]}</i>
+            <p><small>ЗАМЕНА СО ШТРАФОМ · РАСХОД 3</small><strong>{auxiliaryTool.name}</strong></p>
+            <em>{toolStatus(salvage.auxiliaryTool, 3)}</em>
+          </div>}
+        </div>}
         <div className="event-actions">
           <button className="primary-action" type="button" disabled={!primaryAvailable} onClick={() => {
             gameAudio.play(room.kind === 'hazard' ? 'hazard' : room.kind === 'repair' ? 'repair' : 'inspect')
             act('primary')
           }}>
+            {primaryTool && <i className="action-tool-icon">{toolIcons[salvage!.primaryTool]}</i>}
             <span>
               {salvage ? salvage.action : room.kind === 'hazard' ? 'Забрать ящик' : 'Запустить ремонт'}
-              <small>{primaryTool ? `${primaryTool.name} · −1 прочности` : room.kind === 'hazard' ? '−2 корпуса' : '−2 лома · +3 корпуса'}</small>
+              <small>{primaryTool ? `Основной: ${primaryTool.name} · −1 прочности` : room.kind === 'hazard' ? '−2 корпуса' : '−2 лома · +3 корпуса'}</small>
             </span>
           </button>
           {salvage && auxiliaryTool && <button className="secondary-action tool-auxiliary" type="button" disabled={!auxiliaryAvailable} onClick={() => {
             gameAudio.play('inspect')
             act('auxiliary')
-          }}>{salvage.action}<small>{auxiliaryTool.name} · −3 прочности</small></button>}
+          }}><i className="action-tool-icon">{toolIcons[salvage.auxiliaryTool!]}</i><span>{salvage.action}<small>Замена: {auxiliaryTool.name} · −3 прочности</small></span></button>}
           <button className="secondary-action" type="button" onClick={() => {
             gameAudio.play('ui')
             if (salvage) onClose()
@@ -947,7 +1000,7 @@ function ExpeditionScreen({ sound, onSound }: { sound: boolean; onSound: () => v
 
       <AnimatePresence>
         {run.notice && !run.combat && !run.trapEvent && !run.randomEncounter && (
-          <motion.button className={`notice ${run.notice === SHIP_SURVEY_COMPLETE_NOTICE ? 'survey-complete' : ''}`} type="button" onClick={clearNotice} initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.button className={`notice ${run.notice === SHIP_SURVEY_COMPLETE_NOTICE ? 'survey-complete' : ''} ${run.notice.includes('Низкая прочность') || run.notice.includes('сломался') ? 'tool-warning' : ''}`} type="button" onClick={clearNotice} initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}>
             <span />{run.notice}
           </motion.button>
         )}
@@ -992,7 +1045,17 @@ function ResultScreen() {
   )
 }
 
-const onboardingSlides = [
+interface OnboardingSlide {
+  eyebrow: string
+  title: string
+  body: string
+  image: string
+  alt: string
+  points: readonly string[]
+  visual?: 'map'
+}
+
+const onboardingSlides: readonly OnboardingSlide[] = [
   {
     eyebrow: 'ЗАДАЧА ВЫЛАЗКИ',
     title: 'Соберите лом и вернитесь',
@@ -1007,7 +1070,8 @@ const onboardingSlides = [
     body: 'Выбирайте соседний отсек кнопками маршрута. Схема палубы в правом верхнем углу показывает уже разведанный путь.',
     image: galaxyMapImage,
     alt: 'Карта сектора с доступными заброшенными кораблями',
-    points: ['Неизвестные отсеки раскрываются при входе', 'Следите за энергией до каждого нового шага'],
+    points: ['Кнопка компаса открывает полную схему палубы', 'Стрелка показывает соседний отсек, а −1 — цену перехода'],
+    visual: 'map',
   },
   {
     eyebrow: 'ДОБЫЧА И СНАРЯЖЕНИЕ',
@@ -1071,17 +1135,22 @@ function Onboarding({ open, onComplete }: { open: boolean; onComplete: () => voi
                 />
               </AnimatePresence>
               <div className="onboarding-shade" />
+              {slide.visual === 'map' && <div className="onboarding-map-demo" aria-label="Пример управления картой корабля">
+                <div className="map-demo-toolbar"><span><Icon24CompassOutline /></span><strong>СХЕМА ПАЛУБЫ</strong><small>ОТКРЫТЬ КАРТУ</small></div>
+                <div className="map-demo-deck" aria-hidden="true"><i className="visited" /><i className="current"><Icon20CompassOutline /></i><i className="available" /><i /><i className="visited" /><i /></div>
+                <div className="map-demo-route"><Icon20ArrowUpOutline /><span><strong>Соседний отсек</strong><small>Нажмите для перехода</small></span><em>−1</em></div>
+              </div>}
               <div className="onboarding-topline">
                 <span>ИНСТРУКТАЖ · {slideIndex + 1}/{onboardingSlides.length}</span>
                 <button type="button" onClick={onComplete}>Пропустить</button>
               </div>
-              <div className="onboarding-marker" aria-hidden="true">
+              {slide.visual !== 'map' && <div className="onboarding-marker" aria-hidden="true">
                 {slideIndex === 0 && <Icon28Rocket />}
                 {slideIndex === 1 && <Icon24CompassOutline />}
                 {slideIndex === 2 && <Icon20WrenchOutline />}
                 {slideIndex === 3 && <Icon20ShieldLineOutline />}
                 {slideIndex === 4 && <Icon20DoorArrowRightOutline />}
-              </div>
+              </div>}
             </div>
             <div className="onboarding-copy">
               <div className="onboarding-progress" aria-label={`Шаг ${slideIndex + 1} из ${onboardingSlides.length}`}>
@@ -1255,7 +1324,7 @@ function App() {
     <main className="game-shell">
       <AnimatePresence mode="wait">
         <motion.div className="screen-frame" key={screen} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          {screen === 'hangar' && <HangarScreen onSettings={() => setSettingsOpen(true)} sound={sound} onSound={toggleSound} />}
+          {screen === 'hangar' && <HangarScreen onSettings={() => setSettingsOpen(true)} onTutorial={() => setOnboardingOpen(true)} sound={sound} onSound={toggleSound} />}
           {screen === 'upgrades' && <UpgradesScreen />}
           {screen === 'starmap' && <StarMapScreen />}
           {screen === 'expedition' && <ExpeditionScreen sound={sound} onSound={toggleSound} />}

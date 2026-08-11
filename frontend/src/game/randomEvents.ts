@@ -116,11 +116,16 @@ export const getTabletScenario = (seed: number): TabletScenario => {
   return { ...scenario, scrapReward: seededInt(seed, 5, 6, 14) }
 }
 
-export const getRadiationConfig = (seed: number) => ({
-  durations: [seededInt(seed, 6, 2600, 3400), seededInt(seed, 7, 3000, 3900), seededInt(seed, 8, 3400, 4400)],
-  safeCenters: [seededInt(seed, 9, 30, 330), seededInt(seed, 10, 30, 330), seededInt(seed, 11, 30, 330)],
-  reward: seededInt(seed, 12, 8, 16),
-})
+export const getRadiationConfig = (seed: number) => {
+  const firstDuration = seededInt(seed, 6, 3600, 4100)
+  const secondDuration = Math.round(firstDuration * 0.88)
+  const thirdDuration = Math.round(secondDuration * 0.88)
+  return {
+    durations: [firstDuration, secondDuration, thirdDuration],
+    safeCenters: [seededInt(seed, 9, 30, 330), seededInt(seed, 10, 30, 330), seededInt(seed, 11, 30, 330)],
+    reward: seededInt(seed, 12, 8, 16),
+  }
+}
 
 export const getPowerGridReward = (seed: number) => seededInt(seed, 13, 8, 14)
 
